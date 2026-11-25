@@ -434,9 +434,11 @@ function buildFixture(copy: SampleCopy): DemoFixture {
     photo_frame: "mounted",
     photo_asset_id: photoId,
     heading_hi: "शुभ विवाह",
-    wording_en: "invite you to celebrate their wedding",
+    // Two paragraphs: the first prints above the names, the second below (export 1.2).
+    wording_en: "With the blessings of our families\n\ninvite you to celebrate their wedding",
     wording_hi: "आपकी उपस्थिति से हमें अत्यंत प्रसन्नता होगी।",
-    blessing_line: "With the blessings of our families",
+    // None by default: shown only when the couple sets one (export 1.2, row 1).
+    blessing_line: null,
   };
 
   // Publications: REV-1 (no haldi, mehendi to 18:00) and REV-2 (= the D0 draft)
