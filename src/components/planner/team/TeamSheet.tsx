@@ -5,13 +5,17 @@ import { useEffect, useId, useRef } from "react";
 
 import type { Dispatch } from "@/components/planner/forms/command";
 import type { WeddingId } from "@/contracts/domain";
+import type { TeamView } from "@/contracts/read-models";
 
 import { InviteMemberForm } from "./InviteMemberForm";
 import { SharingControls } from "./SharingControls";
+import { TeamMembers } from "./TeamMembers";
 
 export type TeamSheetProps = {
   wedding_id: WeddingId;
   dispatch: Dispatch;
+  /** The `team` read model (D99), read by the layout for owners; null if the read failed. */
+  team: TeamView | null;
   /** Called once the dialog has closed (Close, Escape); the caller moves focus back. */
   onClose: () => void;
 };
@@ -21,7 +25,7 @@ export type TeamSheetProps = {
  * slides in from the right, opened from the shell's wedding menu with no route of its own.
  * Mounted only while open, so a join URL never outlives the sheet. Escape closes it natively.
  */
-export function TeamSheet({ wedding_id, dispatch, onClose }: TeamSheetProps) {
+export function TeamSheet({ wedding_id, dispatch, team, onClose }: TeamSheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const headingId = useId();
 
@@ -51,7 +55,9 @@ export function TeamSheet({ wedding_id, dispatch, onClose }: TeamSheetProps) {
             <X size={20} aria-hidden="true" />
           </button>
         </div>
-        <SharingControls wedding_id={wedding_id} dispatch={dispatch} />
+        {team ? <TeamMembers wedding_id={wedding_id} dispatch={dispatch} team={team} /> : null}
+        {team ? <div className="border-t border-line" /> : null}
+        <SharingControls wedding_id={wedding_id} dispatch={dispatch} sharing={team?.sharing ?? null} />
         <div className="border-t border-line" />
         <InviteMemberForm wedding_id={wedding_id} dispatch={dispatch} />
       </div>

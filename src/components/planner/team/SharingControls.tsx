@@ -7,13 +7,15 @@ import { useCommand } from "@/components/planner/forms/useCommand";
 import { SaveError } from "@/components/planner/kit/SaveError";
 import { PRIMARY, Receipt, SECONDARY } from "@/components/planner/money/form-parts";
 import type { CommandEnvelope } from "@/contracts/commands";
-import type { WeddingId } from "@/contracts/domain";
+import type { SharingSettings, WeddingId } from "@/contracts/domain";
 
 import { SHARING_ROWS, sharingReceipt, teamErrorText } from "./team-text";
 
 type SharingControlsProps = {
   wedding_id: WeddingId;
   dispatch: Dispatch;
+  /** The current flags from `team.sharing`; null when they couldn't be read. */
+  sharing: SharingSettings | null;
 };
 
 /**
@@ -21,7 +23,7 @@ type SharingControlsProps = {
  * (no `team` read model), so each row is a pair of buttons that sends `set_sharing` with only
  * its own key, and the receipt says what managers see now.
  */
-export function SharingControls({ wedding_id, dispatch }: SharingControlsProps) {
+export function SharingControls({ wedding_id, dispatch, sharing }: SharingControlsProps) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
@@ -33,7 +35,7 @@ export function SharingControls({ wedding_id, dispatch }: SharingControlsProps) 
       </p>
       <ul className="flex flex-col divide-y divide-line">
         {SHARING_ROWS.map((row) => (
-          <SharingRow key={row.key} wedding_id={wedding_id} dispatch={dispatch} row={row} />
+          <SharingRow key={row.key} wedding_id={wedding_id} dispatch={dispatch} sharing={sharing} row={row} />
         ))}
       </ul>
     </section>
@@ -43,6 +45,7 @@ export function SharingControls({ wedding_id, dispatch }: SharingControlsProps) 
 function SharingRow({
   wedding_id,
   dispatch,
+  sharing,
   row,
 }: SharingControlsProps & { row: (typeof SHARING_ROWS)[number] }) {
   const labelId = useId();
@@ -65,6 +68,7 @@ function SharingRow({
   }
 
   const error = save.state.status === "error" ? teamErrorText(save.state.error) : null;
+  const current = sharing ? sharing[row.key] : null;
 
   return (
     <li className="flex flex-col gap-2 py-3">
@@ -74,14 +78,18 @@ function SharingRow({
         aria-describedby={error ? errorId : undefined}
         className="flex flex-wrap items-center justify-between gap-2"
       >
-        <span id={labelId} className="text-body font-medium text-ink">
-          {row.label}
+        <span id={labelId} className="flex flex-col">
+          <span className="text-body font-medium text-ink">{row.label}</span>
+          {current === null ? null : (
+            <span className="text-meta text-ink-3">{current ? "Shared now" : "Not shared now"}</span>
+          )}
         </span>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className={PRIMARY}
+            className={current === false ? SECONDARY : PRIMARY}
             aria-label={`Share ${row.noun}`}
+            aria-pressed={current === null ? undefined : current}
             disabled={save.saving}
             onClick={() => send(true)}
           >
@@ -89,8 +97,9 @@ function SharingRow({
           </button>
           <button
             type="button"
-            className={SECONDARY}
+            className={current === false ? PRIMARY : SECONDARY}
             aria-label={`Don't share ${row.noun}`}
+            aria-pressed={current === null ? undefined : !current}
             disabled={save.saving}
             onClick={() => send(false)}
           >

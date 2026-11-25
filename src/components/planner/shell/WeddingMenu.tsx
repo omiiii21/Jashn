@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { MemberRole, WeddingId } from "@/contracts/domain";
+import type { TeamView } from "@/contracts/read-models";
 
 import { SECTION_TITLES, activeSection, sectionHref } from "./nav-items";
 
@@ -30,6 +31,8 @@ type WeddingMenuProps = {
   role: MemberRole;
   /** `dispatchCommand` from the server layout (D98). */
   dispatch: Dispatch;
+  /** The `team` read model for owners (D99); null for managers or when the read failed. */
+  team: TeamView | null;
 };
 
 const ITEM_CLASS =
@@ -41,7 +44,7 @@ const ITEM_CLASS =
  * opens the "Team and sharing" sheet (D64, D109), with no route of its own, so their trigger
  * shows at every width; a manager's trigger hides from 1024 px, where the rail shows the rest.
  */
-export function WeddingMenu({ wedding_id, wedding_name, member_label, role, dispatch }: WeddingMenuProps) {
+export function WeddingMenu({ wedding_id, wedding_name, member_label, role, dispatch, team }: WeddingMenuProps) {
   const onActivity = activeSection(usePathname(), wedding_id) === "activity";
   const isOwner = role === "owner";
   const [teamOpen, setTeamOpen] = useState(false);
@@ -100,7 +103,7 @@ export function WeddingMenu({ wedding_id, wedding_name, member_label, role, disp
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-      {isOwner && teamOpen ? <TeamSheet wedding_id={wedding_id} dispatch={dispatch} onClose={closeTeam} /> : null}
+      {isOwner && teamOpen ? <TeamSheet wedding_id={wedding_id} dispatch={dispatch} team={team} onClose={closeTeam} /> : null}
     </>
   );
 }
