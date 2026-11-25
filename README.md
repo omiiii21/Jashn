@@ -95,7 +95,7 @@ When an invitation card export fails, NudgeBee's `card-export-recovery` workflow
 
 The full décor, menu and music workspace; receipt attachments; task boards; live guest location; real payments; WhatsApp reminders; seating.
 
-Later ideas (not in scope): continuous voice, more languages, hall-level tracking.
+Later ideas (not in scope): continuous voice, more languages, hall-level tracking, turning one long voice note into tasks.
 
 ## Built at FestiveHacks
 
