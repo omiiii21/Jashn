@@ -523,8 +523,8 @@ The laptop was offline from about 07:15 to 11:30, so the kickoff ran at 11:32 in
 - **D140. I-01 is out today.** D125's typed path covers shot V02: Mira picks maroon and gold and a seeded photo in the Invite studio (D136). A6 comes at 15:20 as two pull requests: members first (Must 8: sharing, invites, `/join/[token]`), then uploads, only if green by 15:10.
 - **D141. The video is under two minutes.** The submission form requires it. The target is 1:55, including the title and end cards, which amends demo-script section 4 (2:40–2:45). L posts the 1:55 shot list, and Lane E builds the shell to it. The form also needs the link to one LinkedIn or X post tagging Sarvam, Flagsmith, NudgeBee and WeMakeDevs. The team lead posts it before submitting.
 - **D142. The 14:45 batch.**
-  - A trial merge of Lane A's stack, Lane C's #25 and #24 and Lane D's #21–#23 passed at 14:31: check, 1,203 tests and the build.
-  - Lane A (#13, #14, #16, #17, #20) and Lane C (#25, #24) merged early, once verified.
+  - A trial merge of Lane A's stack, Lane C's #25 and #24 and Lane D's #21–#23 passed at 14:22: check, 1,203 tests and the build.
+  - Lane A (#13, #14, #16, #17, #20) and Lane C (#25, #24) merged early, at 14:23–14:25, once verified.
   - Then: Lane B money, Lane D #21, Lane B events and guests, Lane C voice answers, then Lane D #22, #23, #26 and invite-minimum, then Lane E.
   - Lane B's events pull request needs #21 first.
   - Anything not ready (not draft, CI green) by 14:42 moves to 15:20.
