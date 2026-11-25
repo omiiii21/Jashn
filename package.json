@@ -1,0 +1,54 @@
+{
+  "name": "jashn",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "check": "npm run typecheck && npm run lint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx scripts/seed.ts",
+    "test": "vitest run --passWithNoTests",
+    "test:db": "RUN_DB_TESTS=1 vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@flagsmith/flagsmith": "^12.6.0",
+    "@flagsmith/nodejs": "9.5.0",
+    "@phosphor-icons/react": "2.1.10",
+    "@sparticuz/chromium": "153.0.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.119.2",
+    "drizzle-orm": "0.45.4",
+    "next": "16.4.6",
+    "postgres": "3.4.9",
+    "puppeteer-core": "25.11.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "sarvamai": "1.1.22",
+    "server-only": "0.0.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@next/env": "16.4.6",
+    "@playwright/test": "1.65.1",
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "24.19.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "0.31.11",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "^5",
+    "vitest": "5.1.1"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
