@@ -77,7 +77,8 @@ function allFallbacks(internal: boolean): Record<FlagKey, EvaluatedFlag> {
   ) as Record<FlagKey, EvaluatedFlag>;
 }
 
-function fromSdkFlags(flags: SdkFlagsLike | null, internal: boolean): Record<FlagKey, EvaluatedFlag> {
+/** Every contract flag from one SDK result (null: all fallbacks). Also used by the drawer's probes. */
+export function fromSdkFlags(flags: SdkFlagsLike | null, internal: boolean): Record<FlagKey, EvaluatedFlag> {
   if (!flags) return allFallbacks(internal);
   return Object.fromEntries(FLAG_KEYS.map((key) => [key, fromSdk(flags.flags[key], key, internal)])) as Record<
     FlagKey,
@@ -134,7 +135,8 @@ export function getRenderFlags(
   wedding_id: WeddingId | null,
   opts?: { ui_language?: AppLanguage },
 ): Promise<UserFlagEvaluation> {
-  const key = `${actor.user_id}|${wedding_id ?? "none"}|${opts?.ui_language ?? ""}`;
+  // The UI language defaults to the member's, as the traits do, so VoiceDock and the page share one entry.
+  const key = `${actor.user_id}|${wedding_id ?? "none"}|${opts?.ui_language ?? actor.preferred_language}`;
   let memo: Map<string, Promise<UserFlagEvaluation>> | null = null;
   try {
     memo = renderMemo();

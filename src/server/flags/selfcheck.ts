@@ -15,7 +15,7 @@ import {
 } from "@/contracts/flags";
 
 import { flagsmithIdSalt, flagsmithServerKey } from "./env";
-import { envLabelOf, evaluateEnvironment } from "./evaluate";
+import { envLabelOf, evaluateEnvironment, type EnvironmentEvaluation } from "./evaluate";
 
 /**
  * The self-check (flagsmith 6.7): items 1–5, the 60 s cached summary `/api/health` returns,
@@ -73,6 +73,14 @@ const ITEM_NAMES: Record<number, string> = {
 
 /** Runs items 1–5 once. Never throws. */
 export async function runSelfCheck(): Promise<FlagsSelfCheck> {
+  return (await runSelfCheckWithFlags()).summary;
+}
+
+/**
+ * Items 1–5 plus the environment evaluation they read (the drawer's full check shows each
+ * flag's value and reason from it, at no extra request). Never throws.
+ */
+export async function runSelfCheckWithFlags(): Promise<{ summary: FlagsSelfCheck; environment: EnvironmentEvaluation | null }> {
   const expected_env = expectedEnvLabel(process.env.NODE_ENV);
   const key = flagsmithServerKey();
   const salt = flagsmithIdSalt();
@@ -95,7 +103,7 @@ export async function runSelfCheck(): Promise<FlagsSelfCheck> {
 
     const ok = failed.length === 0;
     logResult(failed);
-    return {
+    const summary: FlagsSelfCheck = {
       ok,
       expected_env,
       env_label,
@@ -108,9 +116,10 @@ export async function runSelfCheck(): Promise<FlagsSelfCheck> {
       sdk: FLAGSMITH_SDK_LABEL,
       checked_at: nowInKolkata(),
     };
+    return { summary, environment };
   } catch {
     logResult([1, 2, 3, 4, 5]);
-    return {
+    const summary: FlagsSelfCheck = {
       ok: false,
       expected_env,
       env_label: "unknown",
@@ -123,6 +132,7 @@ export async function runSelfCheck(): Promise<FlagsSelfCheck> {
       sdk: FLAGSMITH_SDK_LABEL,
       checked_at: nowInKolkata(),
     };
+    return { summary, environment: null };
   }
 }
 
@@ -154,6 +164,11 @@ export function getCachedSelfCheck(): Promise<FlagsSelfCheck> {
     });
   inflight = run;
   return run;
+}
+
+/** Keeps a fresh run (the drawer's "Run check again") as the instance's latest result. */
+export function rememberSelfCheck(summary: FlagsSelfCheck): void {
+  cached = { at: Date.now(), summary };
 }
 
 let startupScheduled = false;
