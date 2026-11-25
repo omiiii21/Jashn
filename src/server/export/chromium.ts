@@ -122,6 +122,14 @@ async function getBrowser(): Promise<{ browser: Browser; cold: boolean }> {
     return { browser, cold: true };
   } catch (error) {
     if (browserPromise === launching) browserPromise = null;
+    // For diagnosing P1 from the runtime logs. A launch error carries no render URL or
+    // token; scrub anything URL-like anyway and keep it short.
+    const name = error instanceof Error ? error.name : "Error";
+    const message = (error instanceof Error ? error.message : String(error))
+      .replace(/https?:\/\/\S+/g, "<url>")
+      .replace(/\s+/g, " ")
+      .slice(0, 300);
+    console.error(`[export] browser launch failed: ${name}: ${message}`);
     throw error;
   }
 }
