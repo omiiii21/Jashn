@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -45,6 +45,7 @@ import {
   newLinkToken,
   sampleCopyOfWedding,
   upsertCouplePhotoAsset,
+  upsertExtraPhotoAssets,
 } from "./seed-apply";
 import { buildSeedDataset, fallbackUserId, seedAccounts, type SeedDataset } from "./seed-data";
 
@@ -423,6 +424,38 @@ describe.skipIf(!isLocalDatabase(url))("applySeedState and the seed links (copy 
 
     await clearFiles();
     await apply();
+  });
+
+  it("adds the extra photos ASSET-PHOTO-2 to -6 without moving the card's photo, and keeps them through a reset", async () => {
+    await apply();
+    const W = dataset.wedding_id;
+    const extraIds = dataset.extra_photos.map((photo) => photo.asset_id);
+    cleanup.push(async () => {
+      await db.delete(assets).where(inArray(assets.id, extraIds));
+    });
+
+    const before = await db.select({ version: weddings.version }).from(weddings).where(eq(weddings.id, W));
+    const files = dataset.extra_photos.map((photo, index) => ({ seed_key: photo.seed_key, bytes: 100_000 + index, mime_type: "image/jpeg", width: 1200, height: 800 }));
+    const result = await db.transaction((tx) => upsertExtraPhotoAssets(tx, dataset, files));
+    expect(result.assets.map((asset) => asset.seed_key)).toEqual(["ASSET-PHOTO-2", "ASSET-PHOTO-3", "ASSET-PHOTO-4", "ASSET-PHOTO-5", "ASSET-PHOTO-6"]);
+    expect(result.version).toBe(before[0].version + 1);
+
+    // A rerun upserts the same rows.
+    await db.transaction((tx) => upsertExtraPhotoAssets(tx, dataset, files));
+    await apply();
+
+    const rows = await db.select().from(assets).where(inArray(assets.id, extraIds));
+    expect(rows).toHaveLength(5);
+    for (const row of rows) {
+      const photo = dataset.extra_photos.find((candidate) => candidate.asset_id === row.id)!;
+      expect(row).toMatchObject({ wedding_id: W, asset_kind: "couple_photo", seed_key: photo.seed_key, storage_path: photo.storage_path, mime_type: "image/jpeg" });
+    }
+    const [style] = await db.select({ photo_asset_id: inviteStyles.photo_asset_id }).from(inviteStyles).where(eq(inviteStyles.wedding_id, W));
+    expect(style.photo_asset_id).toBe(dataset.photo.asset_id);
+
+    await expect(db.transaction((tx) => upsertExtraPhotoAssets(tx, dataset, [{ seed_key: "ASSET-PHOTO-9", bytes: 1, mime_type: "image/jpeg" }]))).rejects.toThrow(
+      /not one of the extra photos/,
+    );
   });
 
   it("resets with the members' current Auth user ids, so nobody is signed out", async () => {

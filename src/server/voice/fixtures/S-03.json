@@ -1,0 +1,39 @@
+{
+ "row_id": "S-03",
+ "start_state": "T0",
+ "source": "hand-written from voice.md 7.2",
+ "stt": {
+  "transcript": "Shaadi Bengaluru mein hai, December mein. Budget baarah lakh hai.",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "hinglish",
+  "missing_fields": [
+   "day",
+   "year",
+   "bride_name",
+   "groom_name"
+  ],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "set_wedding_profile",
+    "month": 12,
+    "city": "Bengaluru",
+    "budget_inr": 1200000,
+    "heard": [
+     {
+      "field": "month",
+      "phrase": "December"
+     },
+     {
+      "field": "budget_inr",
+      "phrase": "baarah lakh"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}

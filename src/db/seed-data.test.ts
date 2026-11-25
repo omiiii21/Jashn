@@ -7,6 +7,7 @@ import { isUuidShaped, SAMPLE_COPIES, seededId, type SampleCopy } from "./ids";
 import { buildItinerarySnapshot, diffSnapshots } from "./itinerary-snapshot";
 import {
   buildSeedDataset,
+  extraPhotosOf,
   fallbackUserId,
   formatWhen,
   SEED_ID_TABLES,
@@ -639,3 +640,24 @@ describe("the couple photo and the REV-2 card job", () => {
 // Keep the SeedRows type exercised so a schema change that breaks it fails this file's typecheck.
 const _typecheck: SeedRows = dataset().rows;
 void _typecheck;
+
+describe("the extra couple photos (ASSET-PHOTO-2 to -6)", () => {
+  it("have stable seed keys, fixed ids per copy and {wedding_id}/{asset_id}.jpg paths, and no D0 row", () => {
+    const user_ids = Object.fromEntries(seedAccounts("a").map((account) => [account.email, fallbackUserId(account.email)]));
+    const first = buildSeedDataset("a", { user_ids });
+    const again = buildSeedDataset("a", { user_ids });
+    expect(first.extra_photos.map((photo) => photo.seed_key)).toEqual(["ASSET-PHOTO-2", "ASSET-PHOTO-3", "ASSET-PHOTO-4", "ASSET-PHOTO-5", "ASSET-PHOTO-6"]);
+    expect(first.extra_photos.map((photo) => photo.file_name)).toEqual(["couple-photo-2.jpg", "couple-photo-3.jpg", "couple-photo-4.jpg", "couple-photo-5.jpg", "couple-photo-6.jpg"]);
+    expect(again.extra_photos).toEqual(first.extra_photos);
+    for (const photo of first.extra_photos) {
+      expect(photo.asset_id).toBe(seededId("a", "assets", photo.seed_key));
+      expect(photo.storage_path).toBe(`${first.wedding_id}/${photo.asset_id}.jpg`);
+    }
+    const ids = new Set([first.photo.asset_id, ...first.extra_photos.map((photo) => photo.asset_id)]);
+    expect(ids.size).toBe(6);
+    const otherCopy = extraPhotosOf("b").map((photo) => photo.asset_id);
+    expect(otherCopy.some((id) => ids.has(id))).toBe(false);
+    // Only ASSET-PHOTO has a D0 row; the extras exist once the photo step uploads them.
+    expect((first.rows.assets ?? []).some((row) => String(row.seed_key).startsWith("ASSET-PHOTO-"))).toBe(false);
+  });
+});

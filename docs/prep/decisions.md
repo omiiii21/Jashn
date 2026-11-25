@@ -511,3 +511,22 @@ The laptop was offline from about 07:15 to 11:30, so the kickoff ran at 11:32 in
     - posts what Lane E needs: a batch merged, what is live, and when a clip is ready to record.
   - Each side edits only its own sections.
   - Secrets never go to GitHub, Notion or chat. The demo accounts' passphrase is passed in person.
+- **D134. `reset_demo` restores the seeded members.** A removed member (Diya in the demo) comes back with the seeded role, so repeated demos start the same way. Agreed with Lane A at 14:00; built in #13.
+- **D135. Example key fix.** Invitations are keyed per guest, so domain-and-data's example key is `INV-G40-EVT-REC` (Tara Bhat, guest 40, household H16), not `INV-H16-EVT-REC`. Fixed in the spec; the seed already uses it.
+- **D136. Six couple photos, and a picker in the Invite studio.**
+  - The fictional couple has six photos: `scripts/seed-assets/couple-photo.jpg` and `couple-photo-2.jpg` to `-6.jpg` (#9, merged 14:15). The seed loads them as ASSET-PHOTO and ASSET-PHOTO-2 to -6 (#20).
+  - The Invite studio lists the wedding's couple photos and sets one with a single tap: a draft change through `update_invite_style` with `photo_asset_id`, no upload (Lane D, lane-d-invite-minimum).
+  - Uploads (A6's `/api/uploads/sign` and `add_asset`) are optional today.
+- **D137. Vercel deploys from the CLI.** The Vercel GitHub app has no access to the repo, so a merge deploys nothing. L deploys main from a clean clone after each batch (`vercel deploy --prod`). Deploys made this way still carry the commit, which `/api/health` reports. `vercel.json` keeps lane branches from deploying.
+- **D138. EX-05 stands as written.** A system token is accepted only as `Bearer <token>`. The scheme is case-insensitive. Leading, trailing, doubled or tab whitespace answers 401 like any bad token. Lane A's `bearerToken` enforces this (#13), and Lane D's ops routes also refuse those shapes before calling it. This replaces the earlier idea of loosening EX-05.
+- **D139. E-05 keeps Lane C's own review card** ("Publish revision N · 1 change: …"). The voice dock doesn't mount PublishSheet. A tap makes one write, and managers are refused at the turn. This amends D59 and voice.md 886. On the Events page, Lane B mounts Lane D's `InvitePublishPanel` for owners. Managers see "Only an owner can publish. Your changes are safe in the draft." and the change list.
+- **D140. I-01 is out today.** D125's typed path covers shot V02: Mira picks maroon and gold and a seeded photo in the Invite studio (D136). A6 comes at 15:20 as two pull requests: members first (Must 8: sharing, invites, `/join/[token]`), then uploads, only if green by 15:10.
+- **D141. The video is under two minutes.** The submission form requires it. The target is 1:55, including the title and end cards, which amends demo-script section 4 (2:40–2:45). L posts the 1:55 shot list, and Lane E builds the shell to it. The form also needs the link to one LinkedIn or X post tagging Sarvam, Flagsmith, NudgeBee and WeMakeDevs. The team lead posts it before submitting.
+- **D142. The 14:45 batch.**
+  - A trial merge of Lane A's stack, Lane C's #25 and #24 and Lane D's #21–#23 passed at 14:22: check, 1,203 tests and the build.
+  - Lane A (#13, #14, #16, #17, #20) and Lane C (#25, #24) merged early, at 14:23–14:25, once verified.
+  - Then: Lane B money, Lane D #21, Lane B events and guests, Lane C voice answers, then Lane D #22, #23, #26 and invite-minimum, then Lane E.
+  - Lane B's events pull request needs #21 first.
+  - Anything not ready (not draft, CI green) by 14:42 moves to 15:20.
+- **D143. NudgeBee: account checks first, cluster only as the fallback.** As research-nudgebee planned, the recovery workflow is NudgeBee HTTP steps with an in-app approval. If check T2 (an HTTP step with no agent connected) passes, no agent or cluster is needed. The agent chart pulls about 1.5 GB of images, which this venue Wi-Fi (about 120 KB/s) can't deliver in time. So the kind fallback needs the phone hotspot.
+- **D144. No per-category "if approved" figure.** M6 defines `if_approved_committed_inr` as a wedding total. It's already in `MoneyTotals` and filled by Lane A's ledger. Budget category lines get nothing extra today.

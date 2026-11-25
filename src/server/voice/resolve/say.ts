@@ -18,7 +18,28 @@ export function countHi(n: number): string {
   return hindiNumberWords(n);
 }
 
-const RUPEE_FIGURE = /₹([0-9][0-9,]*)/g;
+const HINGLISH_COUNTS = ["", "ek", "do", "teen", "char", "paanch", "chhah", "saat", "aath", "nau", "das", "gyarah", "barah"];
+
+/** Small counts as Latin Hindi words for a Hinglish display ("teen badlav"). */
+export function countHinglish(n: number): string {
+  return HINGLISH_COUNTS[n] ?? String(n);
+}
+
+/** Hinglish clock words in Latin for a reply line (4.10): "shaam saat baje", "shaam saade paanch baje". */
+export function clockHinglishWords(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const daypart = h < 12 ? "subah" : h < 16 ? "dopahar" : h < 20 ? "shaam" : "raat";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  if (m === 0) return `${daypart} ${countHinglish(hour12)} baje`;
+  if (m === 30) return `${daypart} saade ${countHinglish(hour12)} baje`;
+  if (m === 15) return `${daypart} sawa ${countHinglish(hour12)} baje`;
+  if (m === 45) return `${daypart} paune ${countHinglish(hour12 === 12 ? 1 : hour12 + 1)} baje`;
+  return clockHinglish(time);
+}
+
+/** A ₹ figure: grouped digits only, so a comma after the figure stays in the sentence. */
+export const RUPEE_FIGURE_SOURCE = "₹([0-9](?:[0-9,]*[0-9])?)";
+const RUPEE_FIGURE = new RegExp(RUPEE_FIGURE_SOURCE, "g");
 
 /** Replaces every ₹ figure in a display text with its words, for speech. */
 export function speakAmounts(text: string, lang: "hi" | "en"): string {

@@ -1,14 +1,14 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 
 import type { CommandEnvelope, CommandResponse } from "@/contracts/commands";
-import type { SessionActor } from "@/contracts/domain";
+import type { GuestActor, SessionActor } from "@/contracts/domain";
 import type { SetupSavedInput } from "@/contracts/flags";
 import type { HandlerMap } from "@/contracts/services";
 import { createDb } from "@/db/client";
-import { activityEntries, commandReceipts, members, venues, weddings } from "@/db/schema";
+import { activityEntries, commandReceipts, guests, households, invitationLinks, members, venues, weddings } from "@/db/schema";
 
 import { assertSameWedding, createDispatcher } from "./dispatcher";
 import { getHandlerRegistry } from "./registry";
@@ -225,6 +225,46 @@ describe("set_wedding_profile through the dispatcher", () => {
     const response = await dispatcher.runCommand(actor, profileEnvelope(wedding_id, { city: "Goa" }, randomUUID()));
     expect(response).toMatchObject({ ok: false, error: { code: "forbidden" } });
     expect(await versionOf(wedding_id)).toBe(1);
+  });
+
+  it("refuses a guest whose link was revoked while it waited on the lock, with the guest 404 (G5, 6.3)", async () => {
+    const { wedding_id } = await createWedding(newUser());
+    const [household] = await db.insert(households).values({ wedding_id, name: "Bhat" }).returning({ id: households.id });
+    const [guest] = await db.insert(guests).values({ wedding_id, household_id: household.id, full_name: "Tara Bhat" }).returning({ id: guests.id });
+    const token_hash = createHash("sha256").update(randomUUID(), "utf8").digest();
+    const [link] = await db
+      .insert(invitationLinks)
+      .values({ wedding_id, household_id: household.id, token_hash, token_hint: "abcd" })
+      .returning({ id: invitationLinks.id });
+    const guestActor: GuestActor = {
+      kind: "guest",
+      wedding_id,
+      household_id: household.id,
+      household_name: "Bhat",
+      guest_ids: [guest.id],
+      token_hash: token_hash.toString("hex"),
+    };
+    let calls = 0;
+    const guestDispatcher = dispatcherWith({
+      registry: () => ({
+        set_dietary: async () => {
+          calls += 1;
+          return { outcome: "unchanged", result: {} as never, activity: null };
+        },
+      }),
+    });
+    const envelope = (key: string) =>
+      ({ wedding_id, command: "set_dietary", input: { guest_id: guest.id, dietary_note: "Jain" }, idempotency_key: key, source: "guest_link" }) as unknown as CommandEnvelope;
+
+    const active = await guestDispatcher.runCommand(guestActor, envelope(randomUUID()));
+    expect(outcomeOf(active)).toBe("unchanged");
+    expect(calls).toBe(1);
+
+    await db.update(invitationLinks).set({ revoked_at: new Date() }).where(eq(invitationLinks.id, link.id));
+    const revoked = await guestDispatcher.runCommand(guestActor, envelope(randomUUID()));
+    expect(revoked).toEqual({ ok: false, error: { code: "not_found", message: "Not found.", field: null } });
+    expect(JSON.stringify((revoked as { error: unknown }).error)).toBe('{"code":"not_found","message":"Not found.","field":null}');
+    expect(calls).toBe(1);
   });
 
   it("refuses a voice write while the gate is paused, with the prefill (V3)", async () => {

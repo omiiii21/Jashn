@@ -9,6 +9,16 @@ import { assertReadModelAccess, loadSharing } from "@/server/authz/guard";
 import { runCommand } from "@/server/commands/dispatcher";
 import { handlerFor } from "@/server/commands/registry";
 import { buildWeddingProfile, export_job_status } from "@/server/read-models";
+import { buildActivityFeed } from "@/server/read-models/activity-feed";
+import { buildCateringEstimate } from "@/server/read-models/catering-estimate";
+import { buildGuestInvitationView, readGuestRevision } from "@/server/read-models/guest-view";
+import { buildItinerary } from "@/server/read-models/itinerary";
+import { buildMoneySummary } from "@/server/read-models/money-summary";
+import { buildProposals } from "@/server/read-models/proposals";
+import { buildRsvpGuestList } from "@/server/read-models/rsvp-guest-list";
+import { buildRsvpTotals } from "@/server/read-models/rsvp-totals";
+import { buildVendorLedger } from "@/server/read-models/vendor-ledger";
+import { resolveGuestToken } from "@/server/authz/guest-token";
 
 /**
  * The services every lane calls (architecture 4.2 rule 3, 4.3). Real when the database and
@@ -52,6 +62,38 @@ const realServices: Services = {
         const actor = { ...request.actor, wedding_id: request.wedding_id };
         return (await export_job_status(actor, params as ReadModelParams<"export_job_status">)) as ReadModelResult<N>;
       }
+      case "itinerary": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildItinerary(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "activity_feed": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildActivityFeed(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "money_summary": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildMoneySummary(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "vendor_ledger": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildVendorLedger(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "catering_estimate": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildCateringEstimate(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "proposals": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildProposals(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "rsvp_totals": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildRsvpTotals(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "rsvp_guest_list": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildRsvpGuestList(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
       default:
         // Seeded ids equal the fixture ids (D100), so a fixture read of a real wedding still
         // runs the guard first: only its members, and only what their role may open (6.1).
@@ -60,8 +102,14 @@ const realServices: Services = {
     }
   },
 
-  guestInvitationView: (token) => fixtureServices.guestInvitationView(token),
-  guestRevision: (token) => fixtureServices.guestRevision(token),
+  async guestInvitationView(token) {
+    const guest = await resolveGuestToken(token);
+    return guest ? buildGuestInvitationView(getDb(), guest) : null;
+  },
+  async guestRevision(token) {
+    const guest = await resolveGuestToken(token);
+    return guest ? readGuestRevision(getDb(), guest) : null;
+  },
   signUpload: (actor, request) => fixtureServices.signUpload(actor, request),
 };
 

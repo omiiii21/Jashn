@@ -5,6 +5,11 @@ import { LANE_D_COMMANDS } from "@/contracts/commands";
 import type { CommandHandler, HandlerMap } from "@/contracts/services";
 import { inviteHandlers } from "@/server/invite/handlers";
 
+import { demoHandlers } from "./demo";
+import { eventHandlers } from "./events";
+import { guestHandlers } from "./guests";
+import { ledgerHandlers } from "./ledger";
+import { proposalHandlers } from "./proposals";
 import { weddingProfileHandlers } from "./wedding-profile";
 
 /**
@@ -21,11 +26,12 @@ import { weddingProfileHandlers } from "./wedding-profile";
  */
 const LANE_A_MAPS: HandlerMap[] = [
   weddingProfileHandlers,
-  // eventHandlers,
-  // accessHandlers,
-  // guestHandlers,
-  // ledgerHandlers,
-  // memberHandlers,
+  eventHandlers,
+  demoHandlers,
+  ledgerHandlers,
+  proposalHandlers,
+  guestHandlers,
+  // memberHandlers (A6),
 ];
 
 function buildRegistry(): HandlerMap {
