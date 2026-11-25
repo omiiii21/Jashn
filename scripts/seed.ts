@@ -4,7 +4,8 @@
  *
  *   npx tsx scripts/seed.ts                       every copy: accounts, buckets, D0, links, card, photo
  *   npx tsx scripts/seed.ts --copies demo,a       only those copies
- *   npx tsx scripts/seed.ts --photo-only          the photo step alone, for every copy (D107)
+ *   npx tsx scripts/seed.ts --photo-only          the photo step alone, for every copy (D107): couple-photo.jpg
+ *                                                 as ASSET-PHOTO, and couple-photo-2.jpg to -6.jpg as ASSET-PHOTO-2 to -6
  *   npx tsx scripts/seed.ts --skip-auth --skip-storage --copies c   local, without Supabase
  *
  * Flags: --copies <list>, --skip-auth, --skip-storage, --photo-only, --links-file <path>
@@ -24,8 +25,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { createDb, type Db } from "../src/db/client";
 import { SAMPLE_COPIES, type SampleCopy } from "../src/db/ids";
-import { applySeedState, ensureInvitationLinks, storedSeedUserIds, upsertCouplePhotoAsset } from "../src/db/seed-apply";
-import { buildSeedDataset, fallbackUserId, seedAccounts, type SeedAccount, type SeedDataset } from "../src/db/seed-data";
+import { applySeedState, ensureInvitationLinks, storedSeedUserIds, upsertCouplePhotoAsset, upsertExtraPhotoAssets } from "../src/db/seed-apply";
+import { buildSeedDataset, EXTRA_PHOTO_NUMBERS, extraPhotoSeedKey, fallbackUserId, seedAccounts, type SeedAccount, type SeedDataset } from "../src/db/seed-data";
 
 const ROOT = process.cwd();
 const CARD_FILE = path.join(ROOT, "scripts/seed-assets/card-rev2.png");
@@ -303,6 +304,42 @@ function fallbackUserIds(accounts: SeedAccount[]): Record<string, string> {
   return Object.fromEntries(accounts.map((account) => [account.email, fallbackUserId(account.email)]));
 }
 
+/** The extra couple photos present on disk (couple-photo-2.jpg to -6.jpg); missing ones are skipped. */
+function readExtraPhotos(): ExtraPhotoFile[] {
+  return EXTRA_PHOTO_NUMBERS.flatMap((number) => {
+    const file = path.join(ROOT, "scripts/seed-assets", `couple-photo-${number}.jpg`);
+    return existsSync(file) ? [{ seed_key: extraPhotoSeedKey(number), file_name: path.basename(file), data: readFileSync(file) }] : [];
+  });
+}
+
+type ExtraPhotoFile = { seed_key: string; file_name: string; data: Buffer };
+
+/** The extra photos (ASSET-PHOTO-2 to -6): upload each, then upsert their rows in one transaction. */
+async function extraPhotoStep(db: Db, admin: SupabaseClient, dataset: SeedDataset, extras: ExtraPhotoFile[]): Promise<void> {
+  if (extras.length === 0) return;
+  for (const extra of extras) {
+    const photo = dataset.extra_photos.find((candidate) => candidate.seed_key === extra.seed_key);
+    if (!photo) throw new Error(`${extra.seed_key} is not one of the extra photos`);
+    await uploadObject(admin, "uploads", photo.storage_path, extra.data, "image/jpeg");
+  }
+  const result = await db.transaction((tx) =>
+    upsertExtraPhotoAssets(
+      tx,
+      dataset,
+      extras.map((extra) => {
+        const size = jpegSize(extra.data);
+        return {
+          seed_key: extra.seed_key,
+          bytes: extra.data.length,
+          mime_type: "image/jpeg",
+          ...(size ? { width: size.width, height: size.height } : {}),
+        };
+      }),
+    ),
+  );
+  console.log(`${dataset.copy}: ${result.assets.length} extra photos (${result.assets.map((asset) => asset.seed_key).join(", ")}), version ${result.version}`);
+}
+
 /** Step 5, the photo step (D107, D126): upload the file, then fill the asset row's file fields. */
 async function photoStep(db: Db, admin: SupabaseClient, dataset: SeedDataset, photo: Buffer): Promise<void> {
   await uploadObject(admin, "uploads", dataset.photo.storage_path, photo, "image/jpeg");
@@ -374,7 +411,9 @@ async function main(): Promise<void> {
     const files = {
       card: existsSync(CARD_FILE) ? readFileSync(CARD_FILE) : null,
       photo: existsSync(PHOTO_FILE) ? readFileSync(PHOTO_FILE) : null,
+      extra_photos: readExtraPhotos(),
     };
+    const missingExtras = EXTRA_PHOTO_NUMBERS.length - files.extra_photos.length;
 
     if (options.photoOnly) {
       if (!storage) throw new Error("--photo-only needs Storage: drop --skip-storage");
@@ -383,10 +422,12 @@ async function main(): Promise<void> {
         try {
           const dataset = buildSeedDataset(copy, { user_ids: fallbackUserIds(seedAccounts(copy)) });
           await photoStep(db, storage, dataset, files.photo);
+          await extraPhotoStep(db, storage, dataset, files.extra_photos);
         } catch (error) {
           failures.push(`${copy}: ${describeError(error)}`);
         }
       }
+      if (missingExtras > 0) console.log(`photos: ${missingExtras} of couple-photo-2.jpg to -6.jpg not there yet; skipped`);
       return;
     }
 
@@ -397,6 +438,7 @@ async function main(): Promise<void> {
     else console.log("storage: skipped; no card or photo upload");
     if (storage && !files.card) console.log("card: scripts/seed-assets/card-rev2.png not there yet; JOB-EXP-R2-PNG stays Ready without a file");
     if (storage && !files.photo) console.log("photo: scripts/seed-assets/couple-photo.jpg not there yet; the photo row keeps no file");
+    if (storage && files.photo && missingExtras > 0) console.log(`photos: ${missingExtras} of couple-photo-2.jpg to -6.jpg not there yet; skipped`);
 
     const issued: IssuedLink[] = [];
     for (const copy of options.copies) {
@@ -418,6 +460,7 @@ async function main(): Promise<void> {
       if (storage && files.photo) {
         try {
           await photoStep(db, storage, seeded.dataset, files.photo);
+          await extraPhotoStep(db, storage, seeded.dataset, files.extra_photos);
         } catch (error) {
           failures.push(`${copy}: photo step: ${describeError(error)}`);
         }
