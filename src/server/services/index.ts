@@ -19,6 +19,7 @@ import { buildRsvpGuestList } from "@/server/read-models/rsvp-guest-list";
 import { buildRsvpTotals } from "@/server/read-models/rsvp-totals";
 import { buildTeam } from "@/server/read-models/team";
 import { buildVendorLedger } from "@/server/read-models/vendor-ledger";
+import { buildWeddingNotes } from "@/server/read-models/wedding-notes";
 import { resolveGuestToken } from "@/server/authz/guest-token";
 import { signUploadForMember } from "@/server/storage/uploads";
 
@@ -95,6 +96,10 @@ const realServices: Services = {
       case "rsvp_guest_list": {
         await guardedSharing(name, request.actor, request.wedding_id);
         return (await buildRsvpGuestList(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "wedding_notes": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildWeddingNotes(getDb(), request.wedding_id)) as ReadModelResult<N>;
       }
       case "team": {
         await guardedSharing(name, request.actor, request.wedding_id);
