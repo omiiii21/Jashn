@@ -41,36 +41,11 @@ import {
  */
 
 // ---------------------------------------------------------------------------
-// D99's household fields (provisional until lane-lead-contracts-2 types them)
+// D99's household fields, typed by the contract (lane-lead-contracts-2, #38)
 // ---------------------------------------------------------------------------
 
-export type HouseholdLinkStatus = "none" | "active" | "revoked";
-
-export type RsvpHouseholdGuest = {
-  guest_id: GuestId;
-  seed_key: string | null;
-  full_name: string;
-  group_label: string | null;
-  dietary_note: string | null;
-  /** Owners, and managers with `managers_can_see_guest_contacts`; otherwise left out. */
-  phone?: string | null;
-  email?: string | null;
-};
-
-export type RsvpGuestListHousehold = {
-  household_id: HouseholdId;
-  seed_key: string | null;
-  name: string;
-  relation: string | null;
-  is_synthetic: boolean;
-  /** Guests not deleted, named or synthetic. */
-  guest_count: number;
-  /** Named guests only; the synthetic household lists none (they collapse, 4.4). */
-  guests: RsvpHouseholdGuest[];
-  link_status: HouseholdLinkStatus;
-  /** When the household's current link replaced an earlier one; null if never rotated. */
-  last_rotated_at: IsoInstant | null;
-};
+import type { HouseholdLinkStatus, RsvpGuestListHousehold, RsvpHouseholdGuest } from "@/contracts/read-models";
+export type { HouseholdLinkStatus, RsvpGuestListHousehold, RsvpHouseholdGuest };
 
 export type RsvpGuestListWithHouseholds = RsvpGuestList & { households: RsvpGuestListHousehold[] };
 

@@ -3,8 +3,7 @@ import "server-only";
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 
 import { CommandFailure } from "@/contracts/commands";
-import type { IsoInstant, MemberId, MemberInviteId, MemberRole, SeedKey, SessionActor, SharingSettings, WeddingId } from "@/contracts/domain";
-import type { MemberReadModelBase } from "@/contracts/read-models";
+import type { SessionActor, WeddingId } from "@/contracts/domain";
 import type { DbOrTx } from "@/db/client";
 import { isUuidShaped } from "@/db/ids";
 import { toIstInstant } from "@/db/ist";
@@ -30,36 +29,9 @@ import { memberInvites, members, weddings } from "@/db/schema";
  * accepted, or revoked) is simply not pending, and nothing is stamped.
  */
 
-/** One active member (no `removed_at`): owners first, then by when they joined. */
-export type TeamMember = {
-  member_id: MemberId;
-  seed_key: SeedKey | null;
-  display_name: string;
-  role: MemberRole;
-  /** When the membership began (the `members` row's `created_at`). */
-  joined_at: IsoInstant;
-  /** True for the reader's own row, so the sheet can leave out "Remove" on it. */
-  is_you: boolean;
-};
-
-/** One pending invite: not accepted, not revoked and not yet expired at read time. */
-export type TeamPendingInvite = {
-  member_invite_id: MemberInviteId;
-  seed_key: SeedKey | null;
-  email: string;
-  role: MemberRole;
-  display_name: string | null;
-  invited_at: IsoInstant;
-  expires_at: IsoInstant;
-};
-
-export type TeamView = MemberReadModelBase & {
-  wedding_id: WeddingId;
-  members: TeamMember[];
-  pending_invites: TeamPendingInvite[];
-  /** The three `managers_can_see_*` flags (G7). */
-  sharing: SharingSettings;
-};
+// The `team` contract (lane-lead-contracts-2, #38) carries these exact shapes.
+import type { TeamMember, TeamPendingInvite, TeamView } from "@/contracts/read-models";
+export type { TeamMember, TeamPendingInvite, TeamView };
 
 function safeInteger(name: string, value: unknown): number {
   const number = typeof value === "string" ? Number(value) : value;
