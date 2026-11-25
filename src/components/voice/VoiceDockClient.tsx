@@ -930,6 +930,8 @@ export function VoiceDockClient(props: VoiceDockClientProps) {
   }, [dockState]);
   useEffect(() => {
     toggleRef.current = () => {
+      // Off (voice_pilot off, or offline) means no recording, as with the disabled header mic.
+      if (dockStateRef.current === "off") return;
       const m = micRef.current;
       if (m.kind === "idle") {
         unlockReplyAudio();
