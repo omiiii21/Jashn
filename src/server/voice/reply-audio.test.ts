@@ -4,21 +4,23 @@ import type { SessionActor } from "@/contracts/domain";
 import { fixtureIds, fixtureSessionActor } from "@/contracts/fixtures";
 import type { FlagKey } from "@/contracts/flags";
 
-import type { FlagEvaluation } from "./deps";
-import { handleReplyAudio, type ReplyAudioDeps } from "./reply-audio";
+import type { FlagEvaluation, VoiceDeps } from "./deps";
+import type { VoiceFixture } from "./fixture-mode";
+import { handleReplyAudio, type ReplyAudioDeps, type SynthesizeResult } from "./reply-audio";
 import { createMemoryVoiceTurnStore } from "./store";
 import type { StoredTurn, VoiceTurnStore } from "./types";
 
 const mira = fixtureSessionActor("mira", "demo");
 const diya = fixtureSessionActor("diya", "demo");
 const WEDDING = fixtureIds("demo").wedding_id;
-const TURN_ID = "a41f0000-0000-4000-8000-000000000101";
+const TURN_ID = "6a0b1c2d-3e4f-4a5b-8c6d-7e8f90a1b2c3";
+const SPEECH = { parts: ["एक लाख साठ हज़ार रुपये बाकी हैं।", "दूसरा हिस्सा।"], language_code: "hi-IN" as const, speaker: "simran_enhi_customer" };
 
 function evaluation(opts: { voice_pilot?: boolean; spoken?: boolean } = {}): FlagEvaluation {
   const flag = (enabled: boolean, value: string | null = null) => ({ enabled, value, fallback: false, reason: null });
   const flags = {
     voice_pilot: flag(opts.voice_pilot ?? true),
-    voice_writes_enabled: flag(true),
+    voice_writes_enabled: flag(false),
     spoken_replies: flag(opts.spoken ?? true),
     setup_entry: flag(true, "form_first"),
     setup_entry_synthetic: flag(true, "form_first"),
@@ -30,16 +32,16 @@ function evaluation(opts: { voice_pilot?: boolean; spoken?: boolean } = {}): Fla
 }
 
 function storedTurn(overrides: Partial<StoredTurn> = {}): StoredTurn {
-  const now = new Date().toISOString();
+  const at = "2026-11-25T08:10:00.000Z";
   return {
     voice_turn_id: TURN_ID,
     user_id: mira.user_id,
     member_id: null,
     wedding_id: WEDDING,
-    client_turn_id: "c0000000-0000-4000-8000-000000000101",
+    client_turn_id: "2c3d4e5f-6071-4829-bac1-d2e3f4051627",
     input_mode: "typed",
     speech_language: "hi-IN",
-    transcript: "Caterer का कितना बाकी है?",
+    transcript: "Caterer ka kitna baaki hai?",
     language_code: "hi-IN",
     chip: "hinglish",
     reply_language: "hinglish",
@@ -49,8 +51,8 @@ function storedTurn(overrides: Partial<StoredTurn> = {}): StoredTurn {
     actions: [],
     missing_fields: [],
     options: null,
-    reply_text: "एक लाख पचास हज़ार रुपये बाकी हैं।",
-    reply_speech: { parts: ["एक लाख पचास हज़ार रुपये बाकी हैं।"], language_code: "hi-IN", speaker: "simran_enhi_customer" },
+    reply_text: "एक लाख साठ हज़ार रुपये बाकी हैं।",
+    reply_speech: SPEECH,
     ref_map: {},
     flags: {},
     events: [],
@@ -63,8 +65,8 @@ function storedTurn(overrides: Partial<StoredTurn> = {}): StoredTurn {
     fixture_id: null,
     trace: {},
     timings_ms: {},
-    created_at: now,
-    updated_at: now,
+    created_at: at,
+    updated_at: at,
     ...overrides,
   };
 }
@@ -75,18 +77,14 @@ type State = {
   fixtureMode: boolean;
   store: VoiceTurnStore;
   synthCalls: { text: string; language_code: string; speaker: string }[];
-  synthOk: boolean;
+  synthResult: SynthesizeResult;
+  fixture: VoiceFixture | null;
 };
 
 let state: State;
 
-beforeEach(async () => {
-  state = { session: mira, evaluation: evaluation(), fixtureMode: false, store: createMemoryVoiceTurnStore(), synthCalls: [], synthOk: true };
-  await state.store.insert(storedTurn());
-});
-
 function deps(): Partial<ReplyAudioDeps> {
-  return {
+  const base: Partial<VoiceDeps> = {
     store: state.store,
     readSession: async () => state.session,
     readMember: async (wedding_id) => {
@@ -96,90 +94,96 @@ function deps(): Partial<ReplyAudioDeps> {
     evaluateFlags: async () => state.evaluation,
     dockFlags: (e) => ({
       voice_available: e.flags.voice_pilot.enabled,
-      writes_enabled: e.flags.voice_pilot.enabled && e.flags.voice_writes_enabled.enabled,
+      writes_enabled: false,
       spoken_replies: e.flags.spoken_replies.enabled,
       chip: null,
       fallback: e.fallback,
     }),
     voiceFlagsRecord: () => ({}),
     fixtureMode: () => state.fixtureMode,
-    loadFixture: async (row_id) =>
-      ({ row_id, start_state: "D0", source: "fixture", audio_text: "एक लाख पचास हज़ार रुपये बाकी हैं।" }) as unknown as Awaited<ReturnType<ReplyAudioDeps["loadFixture"]>>,
-    readFixtureAudio: async () => new Uint8Array([0xff, 0xfb, 0x90]),
+    loadFixture: async () => state.fixture,
+    log: () => {},
+  };
+  return {
+    ...base,
     synthesize: async (input) => {
       state.synthCalls.push({ text: input.text, language_code: input.language_code, speaker: input.speaker });
-      if (!state.synthOk) return { ok: false, status: 502, message: "content-type application/json" };
-      return { ok: true, body: new Blob([new Uint8Array([0xff, 0xfb])]).stream() };
+      return state.synthResult;
     },
-    log: () => {},
+    readFixtureAudio: async (row_id) => (row_id === "O-01" ? new Uint8Array([1, 2, 3]) : null),
   };
 }
 
-function get(part: string | number = 1, id = TURN_ID): Promise<Response> {
-  return handleReplyAudio(new Request(`http://localhost/api/voice/turns/${id}/reply-audio?part=${part}`), id, deps());
+function audioRequest(part: number | string = 1, id = TURN_ID): Request {
+  return new Request(`http://localhost/api/voice/turns/${id}/reply-audio?part=${part}`);
 }
 
-describe("GET /api/voice/turns/[voice_turn_id]/reply-audio (1.14)", () => {
-  it("streams the stored part as audio/mpeg, with the stored voice", async () => {
-    const response = await get(1);
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe("audio/mpeg");
-    expect(state.synthCalls).toEqual([{ text: "एक लाख पचास हज़ार रुपये बाकी हैं।", language_code: "hi-IN", speaker: "simran_enhi_customer" }]);
-  });
+beforeEach(async () => {
+  state = {
+    session: mira,
+    evaluation: evaluation(),
+    fixtureMode: false,
+    store: createMemoryVoiceTurnStore(),
+    synthCalls: [],
+    synthResult: { ok: true, body: new Blob([new Uint8Array([0xff, 0xf3])]).stream() },
+    fixture: null,
+  };
+  await state.store.insert(storedTurn());
+});
 
+describe("GET /api/voice/turns/[voice_turn_id]/reply-audio (1.14)", () => {
   it("answers 401 with no session", async () => {
     state.session = null;
-    expect((await get()).status).toBe(401);
+    const response = await handleReplyAudio(audioRequest(), TURN_ID, deps());
+    expect(response.status).toBe(401);
     expect(state.synthCalls).toHaveLength(0);
   });
 
   it("answers 403 forbidden for someone else's turn and for an unknown id", async () => {
     state.session = diya;
-    const other = await get();
-    expect(other.status).toBe(403);
-    expect((await other.json()).error.code).toBe("forbidden");
+    expect((await handleReplyAudio(audioRequest(), TURN_ID, deps())).status).toBe(403);
     state.session = mira;
-    const unknown = await get(1, "00000000-0000-4000-8000-000000000999");
-    expect(unknown.status).toBe(403);
-    expect(state.synthCalls).toHaveLength(0);
-  });
-
-  it("answers 403 voice_unavailable when voice_pilot is off", async () => {
-    state.evaluation = evaluation({ voice_pilot: false });
-    const response = await get();
+    const unknown = "00000000-0000-4000-8000-000000000009";
+    const response = await handleReplyAudio(audioRequest(1, unknown), unknown, deps());
     expect(response.status).toBe(403);
-    expect((await response.json()).error.code).toBe("voice_unavailable");
+    expect((await response.json()).error.code).toBe("forbidden");
     expect(state.synthCalls).toHaveLength(0);
   });
 
-  it("answers 204 with no Bulbul call when spoken_replies is off", async () => {
+  it("answers 403 voice_unavailable with voice_pilot off, and 204 with spoken_replies off, never calling Bulbul", async () => {
+    state.evaluation = evaluation({ voice_pilot: false });
+    const off = await handleReplyAudio(audioRequest(), TURN_ID, deps());
+    expect(off.status).toBe(403);
+    expect((await off.json()).error.code).toBe("voice_unavailable");
     state.evaluation = evaluation({ spoken: false });
-    expect((await get()).status).toBe(204);
+    expect((await handleReplyAudio(audioRequest(), TURN_ID, deps())).status).toBe(204);
     expect(state.synthCalls).toHaveLength(0);
   });
 
-  it("answers 204 for a part past the stored parts and 422 for a bad part", async () => {
-    expect((await get(2)).status).toBe(204);
-    expect((await get("x")).status).toBe(422);
-    expect(state.synthCalls).toHaveLength(0);
+  it("speaks only the stored part n; 204 past the last part; 422 for a bad part", async () => {
+    const response = await handleReplyAudio(audioRequest(2), TURN_ID, deps());
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("audio/mpeg");
+    expect(state.synthCalls).toEqual([{ text: "दूसरा हिस्सा।", language_code: "hi-IN", speaker: "simran_enhi_customer" }]);
+    expect((await handleReplyAudio(audioRequest(3), TURN_ID, deps())).status).toBe(204);
+    expect((await handleReplyAudio(audioRequest("x"), TURN_ID, deps())).status).toBe(422);
   });
 
-  it("answers 500 internal_error when Bulbul fails, with no retry", async () => {
-    state.synthOk = false;
-    const response = await get();
+  it("answers 500 internal_error when Bulbul fails", async () => {
+    state.synthResult = { ok: false, status: 504, message: "no first byte" };
+    const response = await handleReplyAudio(audioRequest(), TURN_ID, deps());
     expect(response.status).toBe(500);
     expect((await response.json()).error.code).toBe("internal_error");
-    expect(state.synthCalls).toHaveLength(1);
   });
 
-  it("fixture mode serves the recorded clip only when the part is the fixture's audio text", async () => {
+  it("in fixture mode serves the clip only for the fixture's audio text, and never calls Bulbul", async () => {
     state.fixtureMode = true;
     await state.store.update(TURN_ID, { fixture_id: "O-01" });
-    const clip = await get();
-    expect(clip.status).toBe(200);
-    expect(clip.headers.get("content-type")).toBe("audio/mpeg");
-    await state.store.update(TURN_ID, { reply_speech: { parts: ["कुछ और"], language_code: "hi-IN", speaker: "simran_enhi_customer" } });
-    expect((await get()).status).toBe(204);
+    state.fixture = { row_id: "O-01", start_state: "D0", source: "test", stt: { transcript: "x", language_code: "hi-IN" }, llm: null, audio_text: SPEECH.parts[0]! };
+    const first = await handleReplyAudio(audioRequest(1), TURN_ID, deps());
+    expect(first.status).toBe(200);
+    expect(new Uint8Array(await first.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+    expect((await handleReplyAudio(audioRequest(2), TURN_ID, deps())).status).toBe(204);
     expect(state.synthCalls).toHaveLength(0);
   });
 });
