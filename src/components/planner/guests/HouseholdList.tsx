@@ -2,7 +2,7 @@ import { EnvelopeSimple, ForkKnife, LockSimple, Phone } from "@phosphor-icons/re
 
 import { EmptyState, SectionHeading, Wash } from "@/components/planner";
 import type { WeddingId } from "@/contracts/domain";
-import type { RsvpGuestList } from "@/contracts/read-models";
+import type { RsvpGuestList, RsvpGuestListHousehold } from "@/contracts/read-models";
 
 import type { Dispatch } from "../forms/command";
 import { groupHouseholds, replyFormGuests, type Household, type HouseholdGuest } from "./households";
@@ -108,10 +108,13 @@ function HouseholdBlock({
   actorName,
   ownerFunctions,
   filtered,
+  link,
 }: {
   wedding_id: WeddingId;
   dispatch: Dispatch;
   household: Household;
+  /** The household's link state from `households[]`; null when the read model doesn't send it. */
+  link: Pick<RsvpGuestListHousehold, "link_status" | "last_rotated_at"> | null;
   functions: FunctionColumn[];
   actorName: string;
   /** Every function, for the owner's invitation controls; null for a manager. */
@@ -157,6 +160,8 @@ function HouseholdBlock({
             dispatch={dispatch}
             household_id={household.household_id}
             householdName={household.household_name}
+            link_status={link?.link_status ?? null}
+            last_rotated_at={link?.last_rotated_at ?? null}
           />
         ) : null}
       </article>
@@ -235,6 +240,7 @@ export function HouseholdList({
   filterTitle: string | null;
 }) {
   const households = groupHouseholds(list);
+  const links = new Map((list.households ?? []).map((item) => [item.household_id as string, item]));
   const contactsHidden = list.hidden.includes("guest_contacts");
 
   return (
@@ -266,6 +272,7 @@ export function HouseholdList({
               actorName={actorName}
               ownerFunctions={ownerFunctions}
               filtered={filterTitle !== null}
+              link={links.get(household.household_id) ?? null}
             />
           ))}
         </ul>

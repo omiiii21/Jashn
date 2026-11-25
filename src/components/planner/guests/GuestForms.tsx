@@ -7,9 +7,11 @@ import { cx } from "@/components/planner/kit/cx";
 import { Field, FormError, INPUT, PRIMARY, QUIET, Receipt, SECONDARY } from "@/components/planner/money/form-parts";
 import type { CommandEnvelope } from "@/contracts/commands";
 import type { WeddingId } from "@/contracts/domain";
+import type { HouseholdLinkStatus } from "@/contracts/read-models";
 
 import type { Dispatch } from "../forms/command";
 import { useCommand } from "../forms/useCommand";
+import { formatDayTime } from "../format";
 
 export type FunctionOption = { event_id: string; title: string };
 export type HouseholdOption = { household_id: string; household_name: string };
@@ -473,11 +475,16 @@ export function HouseholdLinks({
   dispatch,
   household_id,
   householdName,
+  link_status,
+  last_rotated_at,
 }: {
   wedding_id: WeddingId;
   dispatch: Dispatch;
   household_id: string;
   householdName: string;
+  /** From `households[]` (D99); null when the read model doesn't send it. */
+  link_status: HouseholdLinkStatus | null;
+  last_rotated_at: string | null;
 }) {
   const make = useCommand(dispatch);
   const revoke = useCommand(dispatch);
@@ -528,8 +535,20 @@ export function HouseholdLinks({
     }
   }
 
+  const status =
+    link_status === "active"
+      ? last_rotated_at
+        ? `Invite link on, made ${formatDayTime(last_rotated_at)}.`
+        : "Invite link on."
+      : link_status === "revoked"
+        ? "Invite link turned off."
+        : link_status === "none"
+          ? "No invite link yet."
+          : null;
+
   return (
     <div className="flex flex-col gap-2">
+      {status ? <p className="text-meta text-ink-3 tabular-nums">{status}</p> : null}
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -544,6 +563,7 @@ export function HouseholdLinks({
         >
           New invite link
         </button>
+        {link_status === null || link_status === "active" ? (
         <button
           type="button"
           className={QUIET}
@@ -557,6 +577,7 @@ export function HouseholdLinks({
         >
           Turn off link
         </button>
+        ) : null}
       </div>
 
       {confirm === "make" ? (
