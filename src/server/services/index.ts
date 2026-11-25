@@ -10,7 +10,11 @@ import { runCommand } from "@/server/commands/dispatcher";
 import { handlerFor } from "@/server/commands/registry";
 import { buildWeddingProfile, export_job_status } from "@/server/read-models";
 import { buildActivityFeed } from "@/server/read-models/activity-feed";
+import { buildCateringEstimate } from "@/server/read-models/catering-estimate";
 import { buildItinerary } from "@/server/read-models/itinerary";
+import { buildMoneySummary } from "@/server/read-models/money-summary";
+import { buildProposals } from "@/server/read-models/proposals";
+import { buildVendorLedger } from "@/server/read-models/vendor-ledger";
 
 /**
  * The services every lane calls (architecture 4.2 rule 3, 4.3). Real when the database and
@@ -61,6 +65,22 @@ const realServices: Services = {
       case "activity_feed": {
         await guardedSharing(name, request.actor, request.wedding_id);
         return (await buildActivityFeed(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "money_summary": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildMoneySummary(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "vendor_ledger": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildVendorLedger(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "catering_estimate": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildCateringEstimate(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "proposals": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildProposals(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
       }
       default:
         // Seeded ids equal the fixture ids (D100), so a fixture read of a real wedding still
