@@ -89,7 +89,7 @@ export function GuestInvitation({ token, lang, view, is_sample }: GuestInvitatio
     <main
       lang={lang}
       data-invite-theme={wedding.theme === "peacock_gold" ? "peacock" : undefined}
-      className="flex-1 bg-invite-ground px-4 pb-16 pt-4 font-sans text-invite-ink"
+      className="flex-1 bg-invite-ground px-4 pb-16 pt-4 font-[family-name:var(--font-body)] text-invite-ink"
     >
       <div className="mx-auto w-full max-w-md">
         <nav aria-label={copy.language_label} className="flex justify-end gap-2">

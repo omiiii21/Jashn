@@ -1,28 +1,28 @@
 import "server-only";
 
 import type { WeddingId } from "@/contracts/domain";
-import { FIXTURE_TARA_TOKEN, fixtureGuestActor } from "@/contracts/fixtures";
-import type { GuestTokenResolver, RateLimiter } from "@/contracts/services";
+import type { GuestTokenResolver } from "@/contracts/services";
 import { SAMPLE_COPIES, seededId } from "@/db/ids";
+import { resolveGuestToken } from "@/server/authz/guest-token";
+import { clientIpFrom, limitGuestRequest, type RateLimitDecision } from "@/server/authz/rate-limit";
 import { services } from "@/server/services";
-import { createGuestRoutes } from "./guest-routes";
+
+import { createGuestRoutes, guestTokenHash } from "./guest-routes";
 
 /**
- * The one place the guest site's dependencies are bound. Until Lane A's guest token
- * resolver and single rate limiter merge (A5, the 14:45 batch), this binds a fixture
- * resolver (Tara's fixture link only) and a limiter that allows everything. Switching to
- * Lane A's exports changes this file only.
+ * The one place the guest site's dependencies are bound: Lane A's token resolver (live with
+ * a database, Tara's fixture link without) and its single rate limiter (D57). Lane D adds
+ * no counters of its own.
  */
 
-/** Fixture resolver: Tara's fixture token resolves to H16 in the demo copy; nothing else does. */
-const fixtureResolve: GuestTokenResolver = async (token) => (token === FIXTURE_TARA_TOKEN ? fixtureGuestActor("demo") : null);
+export const resolveGuest: GuestTokenResolver = resolveGuestToken;
 
-/** Allow-all limiter until Lane A's limiter is bound. Lane D adds no counters of its own (D57). */
-const allowAll: RateLimiter = async () => ({ allowed: true });
+export const guestRoutes = createGuestRoutes({ services, resolve: resolveGuest, limit: limitGuestRequest });
 
-export const resolveGuest: GuestTokenResolver = fixtureResolve;
-
-export const guestRoutes = createGuestRoutes({ services, resolve: resolveGuest, limit: allowAll });
+/** The guest page's one limiter call per request (domain 6.3: `/i/` counts toward the limits). */
+export function limitGuestPage(token: string, headers: Headers): Promise<RateLimitDecision> {
+  return limitGuestRequest({ token_hash: guestTokenHash(token), ip: clientIpFrom(headers), kind: "get" });
+}
 
 const SAMPLE_WEDDING_IDS: ReadonlySet<string> = new Set(SAMPLE_COPIES.map((copy) => seededId(copy, "weddings", "WEDDING")));
 

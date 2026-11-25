@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { GuestInvitation } from "@/components/invite/guest/GuestInvitation";
@@ -6,7 +7,7 @@ import { LiveRefresh } from "@/components/live/LiveRefresh";
 import { GUEST_POLL_MS } from "@/contracts/api";
 import type { AppLanguage } from "@/contracts/domain";
 import { routes } from "@/contracts/routes";
-import { isSampleWedding, resolveGuest } from "@/server/invite/guest-deps";
+import { isSampleWedding, limitGuestPage, resolveGuest } from "@/server/invite/guest-deps";
 import { services } from "@/server/services";
 
 /**
@@ -35,6 +36,10 @@ export default async function GuestInvitationPage({ params, searchParams }: Page
   const query = await searchParams;
   const lang: AppLanguage = query.lang === "hi" ? "hi" : "en";
 
+  // Limited before the view is read, so a refusal says nothing about whether the link is real.
+  const decision = await limitGuestPage(token, await headers());
+  if (!decision.allowed) return <GuestBusy />;
+
   const view = await guestView(token);
   if (!view) notFound();
   const actor = await resolveGuest(token);
@@ -44,5 +49,16 @@ export default async function GuestInvitationPage({ params, searchParams }: Page
       <GuestInvitation token={token} lang={lang} view={view} is_sample={isSampleWedding(actor?.wedding_id ?? null)} />
       <LiveRefresh endpoint={routes.api.guestRevision(token)} interval_ms={GUEST_POLL_MS} />
     </>
+  );
+}
+
+/** The page's answer to a refused request (domain 6.3): no invitation, no hint about the link. */
+function GuestBusy() {
+  return (
+    <main className="mx-auto flex min-h-dvh max-w-md items-center px-4">
+      <p className="font-[family-name:var(--font-body)] text-body text-ink-2" role="status">
+        This page is busy. Try again in a minute.
+      </p>
+    </main>
   );
 }

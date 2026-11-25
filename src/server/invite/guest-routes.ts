@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+
 import {
   COMMAND_ERROR_HTTP_STATUS,
   commandSchemas,
@@ -10,7 +11,9 @@ import {
   type CommandResponse,
 } from "@/contracts/commands";
 import type { GuestActor, GuestInvitationView } from "@/contracts/domain";
-import { httpStatusOf, type GuestTokenResolver, type RateLimiter, type Services } from "@/contracts/services";
+import { httpStatusOf, type GuestTokenResolver, type Services } from "@/contracts/services";
+import { GUEST_NOT_FOUND_BODY as SHARED_NOT_FOUND, GUEST_RESPONSE_HEADERS, guestNotFoundResponse, isWellFormedToken } from "@/server/authz/guest-token";
+import { clientIpFrom, rateLimitedResponse, type GuestRequestInput, type RateLimitDecision } from "@/server/authz/rate-limit";
 import {
   copyGuestView,
   isGuestView,
@@ -26,14 +29,18 @@ import {
  * with source `guest_link` (AGENTS 4): `dispatchCommand` needs a member session, so the
  * guest transport is this route, not a server action.
  *
- * Dependencies are injected so the tests can bind fixtures and a fake limiter; the one
- * binding for the app is in `guest-deps.ts`.
+ * Lane A's pieces throughout (D57): its token resolver, its single limiter (one call per
+ * request, the per-IP ceiling and the per-token-hash limits), its one 404 body and its
+ * guest headers. Dependencies are injected so the tests can bind fixtures and a fake
+ * limiter; the one binding for the app is in `guest-deps.ts`.
  */
+
+export type GuestLimiter = (input: GuestRequestInput) => Promise<RateLimitDecision>;
 
 export type GuestRouteDeps = {
   services: Services;
   resolve: GuestTokenResolver;
-  limit: RateLimiter;
+  limit: GuestLimiter;
 };
 
 export type GuestRoutes = {
@@ -42,16 +49,8 @@ export type GuestRoutes = {
   dietary(req: Request, token: string): Promise<Response>;
 };
 
-/** The one body every bad token and every out-of-scope id gets (G5, R9, AT-9.4). */
-export const GUEST_NOT_FOUND_BODY: GuestErrorBody = {
-  ok: false,
-  error: { code: "not_found", message: "This page could not be found." },
-};
-
-export const GUEST_RATE_LIMITED_BODY: GuestErrorBody = {
-  ok: false,
-  error: { code: "rate_limited", message: "Too many requests. Try again in a minute." },
-};
+/** The one body every bad token and every out-of-scope id gets: Lane A's (G5, R9, AT-9.4). */
+export const GUEST_NOT_FOUND_BODY: GuestErrorBody = { ok: false, error: { ...SHARED_NOT_FOUND } };
 
 const GUEST_INTERNAL_ERROR_BODY: GuestErrorBody = {
   ok: false,
@@ -77,31 +76,29 @@ function sha256hex(value: string): string {
 }
 
 /**
- * The limiter key for a guest request: `token:{sha256 hex}`. Computed before the token is
- * resolved, so bad and good tokens are limited alike and the limit is no oracle.
+ * The limiter's token key: the token's hex SHA-256 (`GuestActor.token_hash`), null for a
+ * malformed token. Computed before the token is resolved, so bad and good tokens are
+ * limited alike and the limit is no oracle.
  */
-export function guestRateKey(token: string): string {
-  return `token:${sha256hex(token)}`;
+export function guestTokenHash(token: string): string | null {
+  return isWellFormedToken(token) ? sha256hex(token) : null;
 }
 
-function json(body: unknown, status: number, headers?: Record<string, string>): Response {
-  // Cache-Control, Referrer-Policy and X-Robots-Tag come from next.config.ts (G6).
-  return Response.json(body, { status, headers });
+function json(body: unknown, status: number): Response {
+  return Response.json(body, { status, headers: GUEST_RESPONSE_HEADERS });
 }
 
-const notFound = () => json(GUEST_NOT_FOUND_BODY, 404);
+const notFound = () => guestNotFoundResponse();
 
 function validationFailed(message: string, field: string | null): Response {
   const body: GuestErrorBody = { ok: false, error: { code: "validation_failed", message, field } };
   return json(body, 422);
 }
 
-/** One limiter call per request; a denial answers 429 with Retry-After (D57, D108). */
-async function limited(limit: RateLimiter, token: string, kind: "get" | "post"): Promise<Response | null> {
-  const decision = await limit(guestRateKey(token), kind);
-  if (decision.allowed) return null;
-  const retryAfter = Math.max(1, Math.ceil(decision.retry_after_s));
-  return json(GUEST_RATE_LIMITED_BODY, 429, { "Retry-After": String(retryAfter) });
+/** One limiter call per request; a denial answers Lane A's 429 with Retry-After (D57, D108). */
+async function limited(limit: GuestLimiter, req: Request, token: string, kind: "get" | "post"): Promise<Response | null> {
+  const decision = await limit({ token_hash: guestTokenHash(token), ip: clientIpFrom(req.headers), kind });
+  return decision.allowed ? null : rateLimitedResponse(decision.retry_after_s);
 }
 
 async function readJson(req: Request): Promise<Record<string, unknown> | null> {
@@ -172,7 +169,7 @@ export function createGuestRoutes({ services, resolve, limit }: GuestRouteDeps):
   }
 
   async function begin(req: Request, token: string): Promise<Response | { actor: GuestActor; body: Record<string, unknown>; key: string }> {
-    const denied = await limited(limit, token, "post");
+    const denied = await limited(limit, req, token, "post");
     if (denied) return denied;
     const actor = await resolve(token);
     if (!actor) return notFound();
@@ -184,8 +181,8 @@ export function createGuestRoutes({ services, resolve, limit }: GuestRouteDeps):
   }
 
   return {
-    revision: guarded(async (_req, token) => {
-      const denied = await limited(limit, token, "get");
+    revision: guarded(async (req, token) => {
+      const denied = await limited(limit, req, token, "get");
       if (denied) return denied;
       const revision = await services.guestRevision(token);
       if (revision === null) return notFound();

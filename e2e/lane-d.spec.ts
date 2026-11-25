@@ -306,7 +306,7 @@ test.describe("guest site", () => {
       bodies.push(await rsvp.text());
     }
     expect(new Set(bodies).size).toBe(1);
-    expect(JSON.parse(bodies[0])).toEqual({ ok: false, error: { code: "not_found", message: "This page could not be found." } });
+    expect(JSON.parse(bodies[0])).toEqual({ ok: false, error: { code: "not_found", message: "Not found.", field: null } });
   });
 
   test("AT-9.5: privacy headers, no cookies, and only same-origin requests", async ({ page, request }) => {

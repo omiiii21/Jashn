@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { FIXTURE_TARA_TOKEN, fixtureGuestActor, fixtureIds, getDemoFixture } from "@/contracts/fixtures";
-import { fixtureServices, type GuestTokenResolver, type RateLimiter } from "@/contracts/services";
+import { fixtureServices, type GuestTokenResolver } from "@/contracts/services";
 import { seededId } from "@/db/ids";
-import { createGuestRoutes, GUEST_NOT_FOUND_BODY, guestRateKey } from "./guest-routes";
+import { createGuestRoutes, GUEST_NOT_FOUND_BODY, guestTokenHash, type GuestLimiter } from "./guest-routes";
 
 const resolve: GuestTokenResolver = async (token) => (token === FIXTURE_TARA_TOKEN ? fixtureGuestActor("demo") : null);
-const allowAll: RateLimiter = async () => ({ allowed: true });
+const allowAll: GuestLimiter = async () => ({ allowed: true });
 
-function routesWith(limit: RateLimiter = allowAll) {
+function routesWith(limit: GuestLimiter = allowAll) {
   return createGuestRoutes({ services: fixtureServices, resolve, limit });
 }
 
@@ -145,9 +145,9 @@ describe("guest routes: RSVP checks (AT-4.6)", () => {
   });
 
   it("answers 429 rate_limited with Retry-After when the limiter denies, before resolving the token", async () => {
-    const keys: string[] = [];
-    const deny: RateLimiter = async (key) => {
-      keys.push(key);
+    const keys: (string | null)[] = [];
+    const deny: GuestLimiter = async (input) => {
+      keys.push(input.token_hash);
       return { allowed: false, retry_after_s: 42 };
     };
     const limitedRoutes = routesWith(deny);
@@ -163,8 +163,9 @@ describe("guest routes: RSVP checks (AT-4.6)", () => {
       }
     }
     // The key is the token's hash, never the token.
-    expect(keys[0]).toBe(guestRateKey(FIXTURE_TARA_TOKEN));
-    expect(keys.some((key) => key.includes(FIXTURE_TARA_TOKEN))).toBe(false);
+    expect(keys[0]).toBe(guestTokenHash(FIXTURE_TARA_TOKEN));
+    expect(keys[0]).toMatch(/^[0-9a-f]{64}$/);
+    expect(keys.some((key) => key?.includes(FIXTURE_TARA_TOKEN))).toBe(false);
   });
 });
 
