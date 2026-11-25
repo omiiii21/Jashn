@@ -1,15 +1,17 @@
 import "server-only";
 
 import type { IsoInstant, VoiceTurnId, WeddingId } from "@/contracts/domain";
+import { isDatabaseConfigured } from "@/db/client";
+
+import { createDbVoiceTurnStore } from "./store-db";
 import type { StoredTurn, VoiceTurnStore } from "./types";
 
 /**
  * The voice_turns store (voice.md 9, decision D96).
  *
- * Today this is an in-memory fake kept on globalThis, so it survives `next dev` hot reloads
- * (it does not survive a server restart, and it is per instance). Lane A's Drizzle store
- * replaces it behind the same `VoiceTurnStore` interface once `lane-a-schema` is on main:
- * swap the body of `getVoiceTurnStore()` and nothing else changes.
+ * With a database, the rows live in Lane A's `voice_turns` table (store-db.ts). Without one,
+ * an in-memory fake kept on globalThis stands in, so it survives `next dev` hot reloads (not a
+ * server restart, and it is per instance).
  *
  * The store never holds audio (AT-2.13). Writing a turn never moves `weddings.version`.
  */
@@ -80,10 +82,11 @@ function memoryStore(state: MemoryState): VoiceTurnStore {
 }
 
 /**
- * The app's store. In-memory until Lane A's Drizzle implementation lands (D96); then this
- * returns that implementation instead.
+ * The app's store: the Drizzle store on Lane A's `voice_turns` table when `DATABASE_URL` is
+ * set, else the in-memory fake (D96).
  */
 export function getVoiceTurnStore(): VoiceTurnStore {
+  if (isDatabaseConfigured()) return createDbVoiceTurnStore();
   const holder = globalThis as unknown as Record<string, MemoryState | undefined>;
   let state = holder[GLOBAL_KEY];
   if (!state) {
@@ -91,4 +94,21 @@ export function getVoiceTurnStore(): VoiceTurnStore {
     holder[GLOBAL_KEY] = state;
   }
   return memoryStore(state);
+}
+
+/**
+ * Every turn the in-memory fake holds that was created at or after `since`, across speakers.
+ * Only the flags drawer's two-hour counts read it (flagsmith 5.9), and only while no database
+ * is configured; with one, the drawer counts `app.voice_turns` directly.
+ */
+export function memoryTurnsSince(since: IsoInstant): StoredTurn[] {
+  const holder = globalThis as unknown as Record<string, MemoryState | undefined>;
+  const state = holder[GLOBAL_KEY];
+  if (!state) return [];
+  const sinceMs = instantMs(since);
+  const rows: StoredTurn[] = [];
+  for (const turn of state.turns.values()) {
+    if (instantMs(turn.created_at) >= sinceMs) rows.push(clone(turn));
+  }
+  return rows;
 }

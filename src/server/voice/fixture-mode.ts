@@ -38,6 +38,7 @@ export const FIXTURE_ROW_IDS: readonly string[] = [
   "C-02",
   "S-01",
   "S-02",
+  "S-03",
   "M-04",
   "M-05",
   "M-12",

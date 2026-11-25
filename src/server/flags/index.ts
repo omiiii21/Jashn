@@ -7,6 +7,7 @@ import { evaluateUserFlags as evaluateUser, getRenderFlags as renderFlags, readE
 import type { UserFlagEvaluation } from "./evaluate";
 import { checkVoiceGate } from "./gates";
 import { getCachedSelfCheck, scheduleStartupSelfCheck } from "./selfcheck";
+import { handleSetupSaved } from "./setup-saved";
 
 /**
  * Lane C's flags module: the only surface other lanes import (flagsmith.md 6.2). Server only;
@@ -18,6 +19,10 @@ export { fallbackFlag } from "./evaluate";
 export { dockFlags, voiceFlagsRecord } from "./gates";
 export { isInternalUser, userIdentity } from "./identity";
 export { chipKeyForReason, voiceChip } from "./reasons";
+export { entryDecision, entryDecisionLogLine } from "./setup-entry";
+export type { EntryDecision, SetupArm } from "./setup-entry";
+export { prepareSetupRender, recordSetupExposure } from "./setup-render";
+export type { ExposureJob, SetupRender } from "./setup-render";
 
 /**
  * The voice gate the dispatcher calls for every voice command (domain 3.0 step 4): reads
@@ -60,11 +65,13 @@ export function getRenderFlags(
 }
 
 /**
- * The setup-saved hook the dispatcher calls in `after()` after `set_wedding_profile` (5.4).
- * Still a no-op: the conversion lands with the setup experiment (14:45 batch, D39). Never throws.
+ * The setup-saved hook the dispatcher calls in `after()` after `set_wedding_profile` (5.4):
+ * for a non-internal user's first-wedding create, `setup_saved` with the seconds to save, the
+ * exposure row marked converted, then a flush. Never throws.
  */
-export const onSetupSaved: SetupSavedHook = async () => {
-  // No conversion event until lane-c-setup-experiment.
+export const onSetupSaved: SetupSavedHook = async (input) => {
+  scheduleStartupSelfCheck();
+  await handleSetupSaved(input);
 };
 
 /**

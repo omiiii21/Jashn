@@ -6,7 +6,7 @@ import type { ActivityFeedEntry, Itinerary, ItineraryFunction } from "@/contract
 import { routes, withHighlight } from "@/contracts/routes";
 
 import { checkValue, createReadAccess, fold, formatLongDate, formatTime, formatWeekdayDate, formatWeekdayDateHi, hasWords, resolveEvent, resolveMember, resolveVendor, roleOrName, speakTimeEn, type ReadAccess, type VendorRef } from "./resolve/support";
-import { clockHi, clockHinglish, countHi, formatInr, inrWords, spoken } from "./resolve/say";
+import { clockHi, clockHinglish, clockHinglishWords, countHi, countHinglish, formatInr, inrWords, spoken } from "./resolve/say";
 import { reply, shagunNotSetUp } from "./templates";
 import type { ReplyText, ResolveContext, Snapshot, StoredOption, ToolAction } from "./types";
 
@@ -444,9 +444,154 @@ function venueChange(entry: ActivityFeedEntry): { from: string; to: string } | n
   return null;
 }
 
+const EN_COUNTS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+
+function countEn(n: number): string {
+  return EN_COUNTS[n] ?? String(n);
+}
+
+/** The function an entry belongs to: the event itself, or the function holding the requirement. */
+function functionOf(entry: ActivityFeedEntry, itinerary: Itinerary | null): ItineraryFunction | undefined {
+  if (!itinerary) return undefined;
+  if (entry.entity_type === "requirement") {
+    return itinerary.functions.find((f) => f.requirements.some((q) => q.requirement_id === entry.entity_id));
+  }
+  return itinerary.functions.find((f) => f.event_id === entry.entity_id);
+}
+
+/** A requirement's text up to its first comma, starting lowercase (4.2 O-04). */
+function noteItem(entry: ActivityFeedEntry, fn: ItineraryFunction | undefined): string {
+  const fromAfter = typeof entry.after?.text === "string" ? entry.after.text : null;
+  const fromItinerary = fn?.requirements.find((q) => q.requirement_id === entry.entity_id)?.label ?? null;
+  const text = (fromAfter ?? fromItinerary ?? "").split(",")[0]?.trim() ?? "";
+  return text.length > 0 ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+}
+
+function timeChange(entry: ActivityFeedEntry): { which: "start" | "end"; time: string } | null {
+  if (entry.topic !== "event.updated") return null;
+  const after = entry.after ?? {};
+  if (typeof after.end_time === "string") return { which: "end", time: after.end_time.slice(0, 5) };
+  if (typeof after.start_time === "string") return { which: "start", time: after.start_time.slice(0, 5) };
+  return null;
+}
+
+function amountOf(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) ? value : null;
+}
+
+/** Hinglish's own phrasing for the demo's topics (4.2): Latin display, Devanagari speech. */
+function hinglishEntry(entry: ActivityFeedEntry, fn: ItineraryFunction | undefined, actor: string): ReplyText | null {
+  const r: ReplyRegister = "hinglish";
+  const t = fn?.title.toLowerCase() ?? null;
+  const tHi = fn?.title_hi ?? null;
+  const time = timeChange(entry);
+  if (time && t && tHi) {
+    const verb = time.which === "end" ? ["khatam hogi", "ख़त्म होगी"] : ["shuru hogi", "शुरू होगी"];
+    return reply(r, `${actor} ne ${t} ka time badla: ab ${clockHinglishWords(time.time)} ${verb[0]}.`, `${actor} ने ${tHi} का time बदला: अब ${clockHi(time.time)} ${verb[1]}।`);
+  }
+  if (entry.topic === "payment.corrected") {
+    const from = amountOf(entry.before?.amount_inr);
+    const to = amountOf(entry.after?.amount_inr);
+    if (from !== null && to !== null) {
+      return reply(r, `${actor} ne payment ${formatInr(from)} se ${formatInr(to)} kiya.`, `${actor} ने payment ${inrWords(from, "hi")} से ${inrWords(to, "hi")} किया।`);
+    }
+  }
+  if (entry.topic === "requirement.added" && t && tHi) {
+    const item = noteItem(entry, fn);
+    return reply(r, `${actor} ne ${t} mein note joda: ${item}.`, `${actor} ने ${tHi} में note जोड़ा: ${item}।`);
+  }
+  if (entry.topic === "itinerary.published") {
+    return reply(r, `${actor} ne schedule publish kiya.`, `${actor} ने schedule publish किया।`);
+  }
+  return null;
+}
+
+/** The top entry as a phrase for the three-or-more line (4.2 M-10), with where it stands. */
+function gerundOf(entry: ActivityFeedEntry, fn: ItineraryFunction | undefined, r: ReplyRegister): { display: string; speech: string } {
+  const t = fn?.title.toLowerCase() ?? "function";
+  const tHi = fn?.title_hi ?? t;
+  const moved = venueChange(entry);
+  const stands = entry.topic.startsWith("event.")
+    ? entry.awaiting_publish
+      ? { en: ", still a draft", hinglish: [", jo abhi draft hai", ", जो अभी draft है"], hi: ", जो अभी ड्राफ़्ट है" }
+      : { en: ", which is now published", hinglish: [", jo ab publish ho chuka hai", ", जो अब publish हो चुका है"], hi: ", जो अब प्रकाशित हो चुका है" }
+    : { en: "", hinglish: ["", ""], hi: "" };
+  let en: string;
+  let hinglish: [string, string];
+  let hi: string;
+  if (moved) {
+    en = `moving the ${t} to ${moved.to}`;
+    hinglish = [`${t} ko ${moved.to} mein shift karna`, `${t} को ${moved.to} में shift करना`];
+    hi = `${tHi} को ${moved.to} में ले जाना`;
+  } else if (timeChange(entry)) {
+    en = `changing the ${t} time`;
+    hinglish = [`${t} ka time badalna`, `${t} का time बदलना`];
+    hi = `${tHi} का समय बदलना`;
+  } else if (entry.topic === "itinerary.published") {
+    en = "publishing the schedule";
+    hinglish = ["schedule publish karna", "schedule publish करना"];
+    hi = "कार्यक्रम प्रकाशित करना";
+  } else if (entry.topic === "payment.corrected") {
+    en = "correcting a payment";
+    hinglish = ["ek payment theek karna", "एक payment ठीक करना"];
+    hi = "एक भुगतान ठीक करना";
+  } else if (entry.topic.startsWith("payment.")) {
+    en = "recording a payment";
+    hinglish = ["ek payment record karna", "एक payment record करना"];
+    hi = "एक भुगतान दर्ज करना";
+  } else if (entry.topic.startsWith("commitment.")) {
+    en = "changing a vendor's agreed amount";
+    hinglish = ["ek vendor ka contract badalna", "एक vendor का contract बदलना"];
+    hi = "एक वेंडर की तय रकम बदलना";
+  } else if (entry.topic === "requirement.added") {
+    en = `adding a note to the ${t}`;
+    hinglish = [`${t} mein note jodna`, `${t} में note जोड़ना`];
+    hi = `${tHi} में नोट जोड़ना`;
+  } else if (entry.topic.startsWith("event.")) {
+    en = `changing the ${t}`;
+    hinglish = [`${t} mein badlav`, `${t} में बदलाव`];
+    hi = `${tHi} में बदलाव`;
+  } else {
+    en = "a change on the planner";
+    hinglish = ["planner mein ek badlav", "planner में एक बदलाव"];
+    hi = "प्लानर में एक बदलाव";
+  }
+  if (r === "en") return { display: `${en}${stands.en}`, speech: `${en}${stands.en}` };
+  if (r === "hinglish") return { display: `${hinglish[0]}${stands.hinglish[0]}`, speech: `${hinglish[1]}${stands.hinglish[1]}` };
+  return { display: `${hi}${stands.hi}`, speech: `${hi}${stands.hi}` };
+}
+
+/** Two notes of one topic (4.2 O-04), or the 4.8 short form past 140 characters. */
+function twoNotes(entries: ActivityFeedEntry[], itinerary: Itinerary | null, actor: string, r: ReplyRegister): ReplyText {
+  const items = [...entries].reverse().map((entry) => {
+    const fn = functionOf(entry, itinerary);
+    return { item: noteItem(entry, fn), t: fn?.title.toLowerCase() ?? "", tHi: fn?.title_hi ?? fn?.title ?? "" };
+  });
+  const [a, b] = items as [(typeof items)[number], (typeof items)[number]];
+  if (r === "en") {
+    const full = `Today ${actor} added two notes: ${a.item} at the ${a.t}, and ${b.item} at the ${b.t}.`;
+    return reply(r, full.length <= 140 ? full : `Today ${actor} added two notes, at the ${a.t} and the ${b.t}.`);
+  }
+  if (r === "hinglish") {
+    const full = `Aaj ${actor} ne do notes jode: ${a.t} mein ${a.item}, aur ${b.t} mein ${b.item}.`;
+    const fullSpeech = `आज ${actor} ने दो notes जोड़े: ${a.tHi} में ${a.item}, और ${b.tHi} में ${b.item}।`;
+    if (full.length <= 140) return reply(r, full, fullSpeech);
+    return reply(r, `Aaj ${actor} ne do notes jode, ${a.t} aur ${b.t} mein.`, `आज ${actor} ने दो notes जोड़े, ${a.tHi} और ${b.tHi} में।`);
+  }
+  const full = `आज ${actor} ने दो नोट जोड़े: ${a.tHi} में ${a.item}, और ${b.tHi} में ${b.item}।`;
+  return reply(r, full.length <= 140 ? full : `आज ${actor} ने दो नोट जोड़े, ${a.tHi} और ${b.tHi} में।`);
+}
+
 function entrySentence(entry: ActivityFeedEntry, itinerary: Itinerary | null, r: ReplyRegister): ReplyText {
   const fn = itinerary?.functions.find((f) => f.event_id === entry.entity_id);
   const actor = entry.actor_label;
+  if (r === "hinglish" && !venueChange(entry)) {
+    const own = hinglishEntry(entry, functionOf(entry, itinerary), actor);
+    if (own) {
+      if (!entry.awaiting_publish) return own;
+      return reply(r, `${own.display_text} Yeh abhi draft hai.`, `${own.speech_text ?? own.display_text} यह अभी draft है।`);
+    }
+  }
   const moved = venueChange(entry);
   if (moved && fn) {
     const t = fn.title.toLowerCase();
@@ -474,14 +619,16 @@ function importance(entry: ActivityFeedEntry): number {
   return 2;
 }
 
-function entryLink(wedding_id: string, entry: ActivityFeedEntry): string {
+function entryLink(wedding_id: string, entry: ActivityFeedEntry, itinerary: Itinerary | null): string {
   switch (entry.entity_type) {
     case "event":
-      return withHighlight(routes.events(wedding_id, entry.entity_id), ["venue"]);
+      return withHighlight(routes.events(wedding_id, entry.entity_id), [timeChange(entry) ? (timeChange(entry)?.which === "end" ? "end_time" : "start_time") : "venue"]);
     case "vendor":
       return routes.vendor(wedding_id, entry.entity_id);
-    case "requirement":
-      return routes.events(wedding_id);
+    case "requirement": {
+      const fn = functionOf(entry, itinerary);
+      return fn ? withHighlight(routes.events(wedding_id, fn.event_id), ["requirements"]) : routes.events(wedding_id);
+    }
     default:
       return routes.activity(wedding_id);
   }
@@ -501,18 +648,29 @@ async function answerChanges(ctx: ResolveContext, action: ToolAction, deps: Answ
     ...(day ? { day: day as "today" } : {}),
     limit: 50,
   });
-  let entries = feed?.entries ?? [];
+  const all = feed?.entries ?? [];
+  let entries = all;
   if (!member) {
     const others = entries.filter((e) => e.actor_label !== ctx.actor.display_name);
     if (others.length > 0) entries = others;
   }
   if (latest) entries = entries.slice(0, 1);
+  // The speaker's own entries stay on the card, linked but not spoken (4.2, AT-8.3).
+  const ownEntries = !member && !latest && entries !== all ? all.filter((e) => e.actor_label === ctx.actor.display_name) : [];
   const itinerary = await deps.access.itinerary();
-  const cards: VoiceAnswerCard[] = entries.slice(0, 6).map((entry) => ({
-    title: r === "hi" ? entry.summary_hi : entry.summary_en,
-    figure: formatTime(entry.occurred_at.slice(11, 16)),
-    link: entryLink(wedding_id, entry),
-  }));
+  const ownTitle = r === "hi" ? "आपके आज के बदलाव" : r === "hinglish" ? "Aapke aaj ke badlav" : "Your changes today";
+  const cards: VoiceAnswerCard[] = [
+    ...entries.slice(0, 6).map((entry) => ({
+      title: r === "hi" ? entry.summary_hi : entry.summary_en,
+      figure: formatTime(entry.occurred_at.slice(11, 16)),
+      link: entryLink(wedding_id, entry, itinerary),
+    })),
+    ...ownEntries.slice(0, 6).map((entry) => ({
+      title: `${ownTitle}: ${r === "hi" ? entry.summary_hi : entry.summary_en}`,
+      figure: formatTime(entry.occurred_at.slice(11, 16)),
+      link: entryLink(wedding_id, entry, itinerary),
+    })),
+  ];
   if (entries.length === 0) {
     if (r === "en") return { kind: "answer", cards, reply: reply(r, "Nothing has changed today.") };
     if (r === "hinglish") return { kind: "answer", cards, reply: reply(r, "Aaj kuch nahi badla.", "आज कुछ नहीं बदला।") };
@@ -520,17 +678,32 @@ async function answerChanges(ctx: ResolveContext, action: ToolAction, deps: Answ
   }
   if (entries.length === 1) return { kind: "answer", cards, reply: entrySentence(entries[0], itinerary, r) };
   const actor = member?.display_name ?? entries[0].actor_label;
+  if (entries.length === 2 && entries[0].topic === entries[1].topic && entries[0].topic === "requirement.added") {
+    return { kind: "answer", cards, reply: twoNotes(entries, itinerary, actor, r) };
+  }
   if (entries.length === 2 && entries[0].topic === entries[1].topic) {
-    const items = [...entries].reverse().map((entry) => (r === "hi" ? entry.summary_hi : entry.summary_en));
-    if (r === "en") return { kind: "answer", cards, reply: reply(r, `${actor} made two changes: ${items.join("; ")}`) };
-    return { kind: "answer", cards, reply: reply(r, `${actor} ne do badlav kiye: ${items.join("; ")}`, `${actor} ने दो बदलाव किए: ${items.join("; ")}`) };
+    const pair = [...entries].reverse().map((entry) => entrySentence(entry, itinerary, r));
+    return {
+      kind: "answer",
+      cards,
+      reply: reply(r, pair.map((p) => p.display_text).join(" "), pair.map((p) => p.speech_text ?? p.display_text).join(" ")),
+    };
   }
   const top = [...entries].sort((a, b) => importance(a) - importance(b) || b.seq - a.seq)[0];
   const n = entries.length;
-  const topText = r === "hi" ? top.summary_hi : top.summary_en;
-  if (r === "en") return { kind: "answer", cards, reply: reply(r, `${actor} made ${n} changes, including: ${topText}`) };
-  if (r === "hinglish") return { kind: "answer", cards, reply: reply(r, `${actor} ne ${n} badlav kiye, jaise: ${top.summary_hi}`, `${actor} ने ${countHi(n)} बदलाव किए, जैसे: ${top.summary_hi}`) };
-  return { kind: "answer", cards, reply: reply(r, `${actor} ने ${n} बदलाव किए, जैसे: ${topText}`, `${actor} ने ${countHi(n)} बदलाव किए, जैसे: ${topText}`) };
+  const phrase = gerundOf(top, functionOf(top, itinerary), r);
+  const today = day === "today" || day === undefined;
+  if (r === "en") {
+    return { kind: "answer", cards, reply: reply(r, `${actor} made ${countEn(n)} changes${today ? " today" : ""}, including ${phrase.display}.`) };
+  }
+  if (r === "hinglish") {
+    return {
+      kind: "answer",
+      cards,
+      reply: reply(r, `${today ? "Aaj " : ""}${actor} ne ${countHinglish(n)} badlav kiye, jaise ${phrase.display}.`, `${today ? "आज " : ""}${actor} ने ${countHi(n)} बदलाव किए, जैसे ${phrase.speech}।`),
+    };
+  }
+  return { kind: "answer", cards, reply: reply(r, `${today ? "आज " : ""}${actor} ने ${countHi(n)} बदलाव किए, जैसे ${phrase.display}।`) };
 }
 
 // ---------------------------------------------------------------------------

@@ -289,7 +289,13 @@ async function closeOlderOpenTurns(deps: VoiceDeps, turn: StoredTurn): Promise<v
   const recent = await deps.store.recentForSpeaker(turn.user_id, turn.wedding_id, since);
   for (const older of recent) {
     if (older.voice_turn_id === turn.voice_turn_id || older.status !== "proposed") continue;
-    const supersedes = turn.context_turn_id === older.voice_turn_id || sameTarget(turn.actions, older.actions);
+    // Superseded only when the new turn completes or changes the older one (the same kind and
+    // target, or a context merge into its missing fields); any other new turn cancels it.
+    const merged =
+      turn.context_turn_id === older.voice_turn_id &&
+      older.missing_fields.length > 0 &&
+      turn.actions.some((action) => older.actions.some((o) => o.kind === action.kind));
+    const supersedes = merged || sameTarget(turn.actions, older.actions);
     await deps.store.update(
       older.voice_turn_id,
       supersedes ? { status: "superseded", superseded_by_turn_id: turn.voice_turn_id } : { status: "cancelled" },
@@ -644,6 +650,30 @@ async function runPhrase(run: Run, writer: NdjsonWriter, phrase: "confirm" | "ca
       );
       return;
     }
+    // The card stays: the open turn's preview (refreshed on a 409, 1.13) is sent again under
+    // its own id, and this phrase turn keeps its partial actions so a follow-up still merges.
+    const keepCard = (preview: Extract<VoiceStreamEvent, { type: "preview" }>, speech: ReplySpeech | null) =>
+      finish(
+        run,
+        writer,
+        phraseTerminal(
+          preview,
+          { display_text: preview.reply.display_text, speech_text: null, language: preview.reply.language },
+          speech,
+          open.voice_turn_id,
+          { actions: open.actions, missing_fields: open.missing_fields },
+        ),
+      );
+    const refreshed = outcome.body.preview ?? null;
+    if (refreshed) {
+      await keepCard(refreshed, null);
+      return;
+    }
+    const openPreview = storedEvent(open, "preview") as Extract<VoiceStreamEvent, { type: "preview" }> | null;
+    if (error.code === "validation_failed" && openPreview) {
+      await keepCard(openPreview, open.reply_speech);
+      return;
+    }
     if (error.code === "validation_failed") {
       // Confirm is still disabled (a "?" left): ask the open card's question again.
       const preview = storedEvent(open, "preview");
@@ -691,6 +721,9 @@ async function runPhrase(run: Run, writer: NdjsonWriter, phrase: "confirm" | "ca
           { display_text: clarify.question.display_text, speech_text: null, language: clarify.question.language },
           latestQuestion.reply_speech,
           latestQuestion.voice_turn_id,
+          // The repeated question carries the question's own state, so its options stay live
+          // and a follow-up merges into its partial actions (1.8, 6.2).
+          { actions: latestQuestion.actions, missing_fields: latestQuestion.missing_fields, options: latestQuestion.options },
         ),
       );
       return;
