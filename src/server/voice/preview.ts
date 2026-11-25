@@ -16,6 +16,7 @@ import {
   formatLongDate,
   formatShortDate,
   formatTime,
+  formatWeekdayDateHi,
   hasWords,
   heardFor,
   modelMissing,
@@ -30,6 +31,7 @@ import {
   type ValueCheck,
   type VendorRef,
 } from "./resolve/support";
+import { dateSpeech } from "./speech";
 import { reply } from "./templates";
 import type { ReplyText, ResolveContext, ResolvedAction, StoredOption, ToolAction } from "./types";
 
@@ -941,8 +943,16 @@ async function buildUpdateEvent(ctx: ResolveContext, action: ToolAction, index: 
           r === "en"
             ? reply(r, `Do you mean ${read.relative}, ${dShort}? The ${fn.title.toLowerCase()} is on ${currentShort}${daypart.en ? ` ${daypart.en}` : ""}, so which date should I use?`)
             : r === "hinglish"
-              ? reply(r, `${capitalize(word)} matlab ${dShort}? ${fn.title} abhi ${currentShort}${daypart.hl ? ` ${daypart.hl}` : ""} hai, kaunsi tareekh rakhun?`, `${word} मतलब ${dShort}? ${fn.title} अभी ${currentShort}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`)
-              : reply(r, `कल यानी ${dShort}? ${fn.title_hi} अभी ${currentShort}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`);
+              ? reply(
+                  r,
+                  `${capitalize(word)} matlab ${dShort}? ${fn.title} abhi ${currentShort}${daypart.hl ? ` ${daypart.hl}` : ""} hai, kaunsi tareekh rakhun?`,
+                  `${relativeWordSpeech(word)} मतलब ${dateSpeech(resolvedDate, "hinglish")}? ${fn.title} अभी ${dateSpeech(fn.event_date, "hinglish")}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`,
+                )
+              : reply(
+                  r,
+                  `कल यानी ${shortDateHi(resolvedDate)}? ${fn.title_hi} अभी ${shortDateHi(fn.event_date)}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`,
+                  `कल यानी ${dateSpeech(resolvedDate, "hi")}? ${fn.title_hi} अभी ${dateSpeech(fn.event_date, "hi")}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`,
+                );
         return {
           kind: "clarify",
           action: draft,
@@ -1072,7 +1082,12 @@ async function buildCreateEvent(ctx: ResolveContext, action: ToolAction, index: 
     return {
       kind: "clarify",
       action: draft,
-      question: r === "en" ? reply(r, `Do you mean ${read.relative}, ${formatLongDate(resolvedDate, false)}?`) : reply(r, `${capitalize(phrase ?? "kal")} matlab ${formatLongDate(resolvedDate, false)}?`, `${phrase ?? "कल"} मतलब ${formatLongDate(resolvedDate, false)}?`),
+      question:
+        r === "en"
+          ? reply(r, `Do you mean ${read.relative}, ${formatLongDate(resolvedDate, false)}?`)
+          : r === "hinglish"
+            ? reply(r, `${capitalize(phrase ?? "kal")} matlab ${formatLongDate(resolvedDate, false)}?`, `${relativeWordSpeech(phrase ?? "kal")} मतलब ${dateSpeech(resolvedDate, "hinglish")}?`)
+            : reply(r, `कल यानी ${shortDateHi(resolvedDate)}?`, `कल यानी ${dateSpeech(resolvedDate, "hi")}?`),
       options: [{ label: formatLongDate(resolvedDate, false), value: "o1", default: true, apply: [{ action_index: index, field: "event_date", value: resolvedDate }, { action_index: index, field: "__date_confirmed", value: true }] }],
       missing_fields: [`${index}:event_date`],
     };
@@ -1630,6 +1645,22 @@ async function buildSetRsvp(ctx: ResolveContext, action: ToolAction, index: numb
 // ---------------------------------------------------------------------------
 // The entry point
 // ---------------------------------------------------------------------------
+
+/** "26 नवंबर": a short date in Hindi display (4.10 E-08). */
+function shortDateHi(date: string): string {
+  return formatWeekdayDateHi(date).split(", ")[1] ?? date;
+}
+
+/** Relative day words said in Latin, in Devanagari for Hindi speech ("kal" → "कल", 3.5, E-08). */
+const RELATIVE_WORDS_HI: Record<string, string> = { kal: "कल", aaj: "आज", aj: "आज", parso: "परसों", parson: "परसों", parsoon: "परसों", subah: "सुबह", shaam: "शाम", sham: "शाम", raat: "रात", dopahar: "दोपहर", agle: "अगले", hafte: "हफ़्ते", ko: "को" };
+
+function relativeWordSpeech(phrase: string): string {
+  return phrase
+    .trim()
+    .split(/\s+/)
+    .map((word) => RELATIVE_WORDS_HI[word.toLowerCase()] ?? word)
+    .join(" ");
+}
 
 export async function previewWrite(ctx: ResolveContext, action: ToolAction, index: number, deps: WriteDeps): Promise<WriteResult> {
   switch (action.kind) {
