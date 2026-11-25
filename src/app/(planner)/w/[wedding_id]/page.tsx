@@ -26,37 +26,6 @@ function DetailRow({ term, field, children }: { term: string; field?: string; ch
   );
 }
 
-const IST_PARTS = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Asia/Kolkata",
-  hour: "numeric",
-  hourCycle: "h23",
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
-
-/** "Good afternoon", today's date ("Wednesday 25 November") and the days left, all in IST. */
-function greetingFor(at: Date) {
-  const parts = Object.fromEntries(IST_PARTS.formatToParts(at).map((p) => [p.type, p.value]));
-  const hour = Number(parts.hour);
-  const salutation = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const todayUtc = Date.UTC(Number(parts.year), new Date(`${parts.month} 1, 2000`).getMonth(), Number(parts.day));
-  return {
-    salutation,
-    today: `${parts.weekday} ${parts.day} ${parts.month}`,
-    daysToWedding(wedding_date: string): string {
-      const [y, m, d] = wedding_date.split("-").map(Number);
-      if (!y || !m || !d) return "";
-      const days = Math.round((Date.UTC(y, m - 1, d) - todayUtc) / 86_400_000);
-      if (days > 1) return ` · ${days} days to the wedding`;
-      if (days === 1) return " · The wedding is tomorrow";
-      if (days === 0) return " · The wedding is today";
-      return "";
-    },
-  };
-}
-
 /**
  * The landing view at `/w/{wedding_id}` (D60): a minimal, member-guarded page showing the
  * saved name, date, city and budget from `wedding_profile` (D99), so setup can reopen the
@@ -71,22 +40,17 @@ export default async function WeddingLandingPage({ params, searchParams }: Weddi
   // "Not shared with you" comes from `hidden`, never from a zero (G7).
   const budget_inr = profile.hidden.includes("budget") ? undefined : profile.budget_inr;
 
-  // Voice first (Lane E, Doop "Overview, voice-first"): a greeting in IST, then the listening card.
-  const greeting = greetingFor(new Date());
-
   return (
-    <div className="flex flex-col gap-7">
-      <div>
-        <p className="text-table text-ink-3">
-          {greeting.today}
-          {greeting.daysToWedding(profile.wedding_date)}
-        </p>
-        <h1 className="mt-1.5 font-title text-[2.5rem] leading-[46px] font-normal tracking-[-0.01em] text-ink">
-          {greeting.salutation}, {profile.member.display_name}. <span className="text-ink-3">Tell me what changed.</span>
-        </h1>
-      </div>
+    <div className="flex flex-col gap-6">
+      <h1 data-field="display_name" className="font-title text-title text-ink">
+        {profile.display_name}
+      </h1>
 
-      <VoiceHero className="max-w-4xl" example="Caterer ko chaalis hazaar advance diya tha" />
+      {/* Voice first (Lane E): the first thing an owner sees is the way to talk to Jashn. */}
+      <VoiceHero
+        className="max-w-3xl"
+        examples={["Caterer ko ab kitna dena hai?", "Caterer ko chaalis hazaar advance diya tha", "Diya ne kya badla?"]}
+      />
 
       <section aria-labelledby="wedding-details-heading" className="max-w-xl rounded-sheet border border-line bg-paper p-4 lg:p-6">
         <h2 id="wedding-details-heading" className="text-heading text-ink">

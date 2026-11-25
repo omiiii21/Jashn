@@ -22,3 +22,18 @@ export function isVoiceDockBroadcast(value: unknown): value is VoiceDockBroadcas
   const stateOk = v.state === "idle" || v.state === "listening" || v.state === "busy" || v.state === "off";
   return stateOk && (v.heard === null || typeof v.heard === "string");
 }
+
+/** The older broadcast from the dock block merged in #41: a bare state string. */
+export function isVoiceDockState(value: unknown): value is VoiceDockState {
+  return value === "idle" || value === "listening" || value === "busy" || value === "off";
+}
+
+/**
+ * Reads either broadcast shape. `typing` is true only for the newer dock, which also answers
+ * `VOICE_TYPE_EVENT`, so the card offers "type instead" only when it works.
+ */
+export function readVoiceBroadcast(value: unknown): (VoiceDockBroadcast & { typing: boolean }) | null {
+  if (isVoiceDockState(value)) return { state: value, heard: null, typing: false };
+  if (isVoiceDockBroadcast(value)) return { ...value, typing: true };
+  return null;
+}

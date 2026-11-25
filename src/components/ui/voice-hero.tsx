@@ -4,7 +4,7 @@ import { cn } from "cn";
 import { useEffect, useState } from "react";
 
 import {
-  isVoiceDockBroadcast,
+  readVoiceBroadcast,
   VOICE_STATE_EVENT,
   VOICE_STATE_REQUEST_EVENT,
   VOICE_TOGGLE_EVENT,
@@ -15,6 +15,8 @@ import {
 type VoiceHeroProps = {
   /** A line in the person's own words, shown in the transcript area before anything is heard. */
   example?: string;
+  /** The older prop from #41's page; the card shows the second line (the correction), else the first. */
+  examples?: readonly string[];
   className?: string;
 };
 
@@ -43,14 +45,15 @@ function formatElapsed(ms: number): string {
  * push-to-talk, so the words appear after release (voice.md 1.7), and the dock's review card
  * shows what was understood.
  */
-export function VoiceHero({ example, className }: VoiceHeroProps) {
-  const [dock, setDock] = useState<VoiceDockBroadcast | null>(null);
+export function VoiceHero({ example: exampleProp, examples, className }: VoiceHeroProps) {
+  const example = exampleProp ?? examples?.[1] ?? examples?.[0];
+  const [dock, setDock] = useState<(VoiceDockBroadcast & { typing: boolean }) | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     const onState = (e: Event) => {
-      const detail = (e as CustomEvent<unknown>).detail;
-      if (isVoiceDockBroadcast(detail)) setDock(detail);
+      const next = readVoiceBroadcast((e as CustomEvent<unknown>).detail);
+      if (next) setDock(next);
     };
     window.addEventListener(VOICE_STATE_EVENT, onState);
     window.dispatchEvent(new Event(VOICE_STATE_REQUEST_EVENT));
@@ -154,16 +157,18 @@ export function VoiceHero({ example, className }: VoiceHeroProps) {
             English, <span lang="hi">हिंदी</span> or Hinglish
           </span>
           <span>Nothing is saved until you confirm</span>
-          <span className="sm:ml-auto">
-            or{" "}
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event(VOICE_TYPE_EVENT))}
-              className="font-medium text-maroon underline underline-offset-[3px] hover:text-maroon-deep"
-            >
-              type instead
-            </button>
-          </span>
+          {dock?.typing ? (
+            <span className="sm:ml-auto">
+              or{" "}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event(VOICE_TYPE_EVENT))}
+                className="font-medium text-maroon underline underline-offset-[3px] hover:text-maroon-deep"
+              >
+                type instead
+              </button>
+            </span>
+          ) : null}
         </div>
       </div>
     </section>
