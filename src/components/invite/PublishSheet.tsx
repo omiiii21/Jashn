@@ -44,6 +44,13 @@ export function PublishSheet(props: PublishSheetProps) {
   const [notice, setNotice] = useState<Exclude<PublishOutcome, "published"> | null>(null);
   const inFlight = useRef(false);
 
+  // While the draft_changed notice shows, follow the page: whenever its draft version moves
+  // (the refresh can land before or after the 409), adopt that list for the next tap. Set
+  // during render, React's pattern for state derived from changed props.
+  if (notice === "draft_changed" && !pending && props.expected_draft_version !== reviewed.draft_version) {
+    setReviewed({ changes: props.unpublished_changes, draft_version: props.expected_draft_version });
+  }
+
   const publishLabel = next_revision ? `Publish revision ${next_revision}` : "Publish";
   const count = reviewed.changes.length;
   const labels = reviewed.changes
@@ -77,10 +84,8 @@ export function PublishSheet(props: PublishSheetProps) {
       setOpen(false);
       return;
     }
-    if (outcome === "draft_changed") {
-      // Adopt what the page now shows; the owner reviews it and taps again.
-      setReviewed({ changes: props.unpublished_changes, draft_version: props.expected_draft_version });
-    }
+    // On draft_changed the render-time check above adopts the page's newer list as soon
+    // as the page has it; the owner reviews it and taps again.
     setNotice(outcome);
   }
 
