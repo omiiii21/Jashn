@@ -82,10 +82,22 @@ function setupTurn(fixture_id: string, extra: Record<string, string> = {}): Requ
   return new Request("http://localhost/api/voice/turn", { method: "POST", body: form });
 }
 
+type TerminalEvent = {
+  type: string;
+  voice_turn_id: string;
+  confirm_enabled?: boolean;
+  disabled_reason?: string | null;
+  button_label?: string;
+  missing_fields?: string[];
+  code?: string;
+  prefill?: unknown[];
+  reply: { display_text: string; speak: boolean };
+};
+
 async function run(fixture_id: string, extra: Record<string, string> = {}) {
   const events = await readNdjson(await handleTurn(setupTurn(fixture_id, extra), deps()));
-  const terminal = events.find((event) => ["preview", "refused", "question", "answer", "error"].includes(String(event.type))) ?? events[events.length - 1];
-  return { events, terminal };
+  const found = events.find((event) => ["preview", "refused", "question", "answer", "error"].includes(String(event.type))) ?? events[events.length - 1];
+  return { events, terminal: found as unknown as TerminalEvent };
 }
 
 beforeEach(() => {

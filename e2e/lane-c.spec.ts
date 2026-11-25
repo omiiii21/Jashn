@@ -107,3 +107,39 @@ test.describe("lane C: flags and voice routes", () => {
     expect(body.error.code).toBe("forbidden");
   });
 });
+
+test.describe("lane C: the setup screen", () => {
+  test("GET /setup renders the setup screen, or sends a signed-out visitor to /login", async ({ request }) => {
+    const response = await request.get("/setup", { maxRedirects: 0 });
+    if (response.status() >= 300 && response.status() < 400) {
+      expect(response.headers()["location"] ?? "").toMatch(/\/login/);
+      return;
+    }
+    expect(response.status()).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Set up your wedding");
+    // An arm is always assigned; fixture Mira is internal, so she is never exposed (FV13 b is a unit test).
+    expect(html).toMatch(/data-setup-arm="(voice_first|form_first)"/);
+    expect(html).not.toMatch(/ser\.[A-Za-z0-9]/);
+  });
+
+  test("a fixture setup turn (S-01) with no wedding streams a terminal event", async ({ request }) => {
+    const response = await request.post("/api/voice/turn", {
+      multipart: {
+        text: "x",
+        wedding_id: "",
+        client_turn_id: randomUUID(),
+        ui_language: "en",
+        setup_opened_at: new Date().toISOString(),
+        fixture_id: "S-01",
+      },
+    });
+    if (response.status() === 401 || response.status() === 403) return; // signed out, or voice off for this account
+    expect(response.status()).toBe(200);
+    const events = parseNdjson(await response.text());
+    expect(events[0]?.type).toBe("heard");
+    // Flagsmith on fallbacks: writes are refused early with the prefill (AT-1.6); else a draft preview.
+    const terminal = events.find((event) => event.type === "refused" || event.type === "preview");
+    expect(terminal).toBeTruthy();
+  });
+});
