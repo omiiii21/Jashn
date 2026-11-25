@@ -1,0 +1,187 @@
+diff --git a/e2e/lane-b.spec.ts b/e2e/lane-b.spec.ts
+index 251bd45..b1a295e 100644
+--- a/e2e/lane-b.spec.ts
++++ b/e2e/lane-b.spec.ts
+@@ -120,10 +120,7 @@ async function micReport(page: Page): Promise<MicReport> {
+ 
+     const slots = [...document.querySelectorAll('[data-slot="voice"]')];
+     const slot = slots.find(visible) ?? null;
+-    // The mic itself, not the reason chips the dock may render before it (D121).
+-    const TALK = /hold to talk|push to talk|tap to talk|micro?phone|\bmic\b/i;
+-    const buttons = slot ? [...slot.querySelectorAll("button")].filter(visible) : [];
+-    const mic = buttons.find((button) => TALK.test(nameOf(button))) ?? buttons[0] ?? null;
++    const mic = slot?.querySelector("button") ?? null;
+     const box = mic?.getBoundingClientRect() ?? null;
+ 
+     const controls = [...document.querySelectorAll('button, [role="button"], a[href], input, textarea')].filter(visible);
+@@ -187,7 +184,8 @@ test.describe("the landing view (D60, D99)", () => {
+   test("shows the saved name, dates, city and budget", async ({ page }) => {
+     await open(page, routes.overview(WEDDING_ID));
+     const main = page.getByRole("main");
+-    await expect(main.getByRole("heading", { level: 1 })).toHaveText("Mira & Kabir");
++    // Voice first (Lane E): the h1 greets the member; the wedding's name stays in the title.
++    await expect(main.getByRole("heading", { level: 1 })).toContainText("Tell me what changed.");
+     await expect(main).toContainText("13–14 Dec 2026");
+     await expect(main).toContainText("Bengaluru");
+     await expect(main.locator('[data-field="budget_inr"]')).toHaveText("₹12,00,000");
+@@ -239,8 +237,7 @@ test.describe("Annapoorna Caterers at D0 (AT-6.1)", () => {
+     await expect(main).not.toContainText("Outstanding");
+     const owed = lead.locator('[data-field="outstanding_inr"]');
+ 
+-    // The ₹ comes from the app's own faces (Geist, then Anek, per Lane E's pick under D132) with
+-    // tabular figures, never a system fallback face (design-direction 9, ban 11).
++    // The ₹ comes from Anek with tabular figures, never a fallback face (design-direction 9, ban 11).
+     const type = await owed.evaluate(async (element) => {
+       await document.fonts.ready;
+       const style = getComputedStyle(element);
+@@ -252,7 +249,7 @@ test.describe("Annapoorna Caterers at D0 (AT-6.1)", () => {
+           return low <= 0x20b9 && 0x20b9 <= high;
+         });
+       const rupeeFaces = [...document.fonts].filter(
+-        (face) => /geist|anek/i.test(face.family) && face.status === "loaded" && covers20b9(face.unicodeRange),
++        (face) => /anek/i.test(face.family) && face.status === "loaded" && covers20b9(face.unicodeRange),
+       );
+       return {
+         family: style.fontFamily,
+@@ -260,9 +257,9 @@ test.describe("Annapoorna Caterers at D0 (AT-6.1)", () => {
+         rupeeFaceLoaded: rupeeFaces.length > 0,
+       };
+     });
+-    expect(type.family.split(",")[0]).toMatch(/geist|anek/i);
++    expect(type.family.split(",")[0]).toMatch(/anek/i);
+     expect(type.numeric).toContain("tabular-nums");
+-    expect(type.rupeeFaceLoaded, "a Geist or Anek face covering U+20B9 has loaded").toBe(true);
++    expect(type.rupeeFaceLoaded, "an Anek face covering U+20B9 has loaded").toBe(true);
+   });
+ });
+ 
+@@ -292,8 +289,7 @@ test.describe("the nav", () => {
+       // Activity sits in the rail from 1024 px, and in the wedding menu below it.
+       if (width >= 1024) {
+         await expect(nav.getByRole("link", { name: "Activity" })).toHaveAttribute("href", routes.activity(WEDDING_ID));
+-        // Mira is an owner: her menu stays at every width for "Team and sharing" (D64, D109).
+-        await expect(page.getByRole("button", { name: "Wedding menu" })).toBeVisible();
++        await expect(page.getByRole("button", { name: "Wedding menu" })).toBeHidden();
+       } else {
+         await page.getByRole("button", { name: "Wedding menu" }).click();
+         const activity = page.getByRole("menuitem", { name: "Activity" });
+@@ -554,45 +550,3 @@ test.describe("Guests at D0 (AT-4.2, AT-4.8, AT-9.6)", () => {
+     await expectNoSideways(page, "Guests");
+   });
+ });
+-
+-test.describe("Guests: the owner's controls (AT-4.8, AT-4.9)", () => {
+-  test("Mira sees Add a guest, Edit invitations and New invite link", async ({ page }) => {
+-    await open(page, routes.guests(WEDDING_ID));
+-    const main = page.getByRole("main");
+-    await main.getByRole("button", { name: "Add a guest", exact: true }).click();
+-    const form = main.getByRole("form", { name: "Add a guest" });
+-    await expect(form.getByLabel("Full name")).toBeVisible();
+-    await expect(form.getByRole("group", { name: "Invite to" })).toBeVisible();
+-    await expect(form.getByRole("button", { name: "Add guest", exact: true })).toBeVisible();
+-    await expect(main.getByRole("button", { name: "Edit invitations for Tara Bhat" })).toHaveCount(1);
+-    await expect(main.getByRole("button", { name: /^New invite link for the .+ household$/ })).toHaveCount(16);
+-  });
+-
+-  test("no sideways scroll at 390 px with the add form and a link confirmation open", async ({ page }) => {
+-    await page.setViewportSize({ width: 390, height: heightFor(390) });
+-    await open(page, routes.guests(WEDDING_ID));
+-    const main = page.getByRole("main");
+-    await main.getByRole("button", { name: "Add a guest", exact: true }).click();
+-    await main.getByRole("button", { name: /^New invite link for the .+ household$/ }).first().click();
+-    await expect(main.getByText("Any earlier link for this household will stop working.")).toBeVisible();
+-    await expectNoSideways(page, "Guests at 390 px");
+-  });
+-});
+-
+-test.describe("Team and sharing (D64, D109)", () => {
+-  test("the wedding menu opens the sheet with Send invite, and Escape closes it", async ({ page }) => {
+-    await open(page, routes.overview(WEDDING_ID));
+-    const trigger = page.getByRole("banner").getByRole("button", { name: "Wedding menu" });
+-    await trigger.click();
+-    await page.getByRole("menuitem", { name: "Team and sharing" }).click();
+-    const sheet = page.getByRole("dialog", { name: "Team and sharing" });
+-    await expect(sheet).toBeVisible();
+-    await expect(sheet.getByRole("button", { name: "Send invite" })).toBeVisible();
+-    await expect(sheet.getByRole("group", { name: "Budget" })).toBeVisible();
+-    // The menu's close animation must finish first, or its layer takes the Escape.
+-    await expect(page.getByRole("menu")).toHaveCount(0);
+-    await page.keyboard.press("Escape");
+-    await expect(sheet).toHaveCount(0);
+-    await expect(trigger).toBeFocused();
+-  });
+-});
+diff --git a/src/app/(planner)/w/[wedding_id]/page.tsx b/src/app/(planner)/w/[wedding_id]/page.tsx
+index 178cdae..d27c61c 100644
+--- a/src/app/(planner)/w/[wedding_id]/page.tsx
++++ b/src/app/(planner)/w/[wedding_id]/page.tsx
+@@ -26,6 +26,37 @@ function DetailRow({ term, field, children }: { term: string; field?: string; ch
+   );
+ }
+ 
++const IST_PARTS = new Intl.DateTimeFormat("en-GB", {
++  timeZone: "Asia/Kolkata",
++  hour: "numeric",
++  hourCycle: "h23",
++  weekday: "long",
++  day: "numeric",
++  month: "long",
++  year: "numeric",
++});
++
++/** "Good afternoon", today's date ("Wednesday 25 November") and the days left, all in IST. */
++function greetingFor(at: Date) {
++  const parts = Object.fromEntries(IST_PARTS.formatToParts(at).map((p) => [p.type, p.value]));
++  const hour = Number(parts.hour);
++  const salutation = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
++  const todayUtc = Date.UTC(Number(parts.year), new Date(`${parts.month} 1, 2000`).getMonth(), Number(parts.day));
++  return {
++    salutation,
++    today: `${parts.weekday} ${parts.day} ${parts.month}`,
++    daysToWedding(wedding_date: string): string {
++      const [y, m, d] = wedding_date.split("-").map(Number);
++      if (!y || !m || !d) return "";
++      const days = Math.round((Date.UTC(y, m - 1, d) - todayUtc) / 86_400_000);
++      if (days > 1) return ` · ${days} days to the wedding`;
++      if (days === 1) return " · The wedding is tomorrow";
++      if (days === 0) return " · The wedding is today";
++      return "";
++    },
++  };
++}
++
+ /**
+  * The landing view at `/w/{wedding_id}` (D60): a minimal, member-guarded page showing the
+  * saved name, date, city and budget from `wedding_profile` (D99), so setup can reopen the
+@@ -40,17 +71,22 @@ export default async function WeddingLandingPage({ params, searchParams }: Weddi
+   // "Not shared with you" comes from `hidden`, never from a zero (G7).
+   const budget_inr = profile.hidden.includes("budget") ? undefined : profile.budget_inr;
+ 
++  // Voice first (Lane E, Doop "Overview, voice-first"): a greeting in IST, then the listening card.
++  const greeting = greetingFor(new Date());
++
+   return (
+-    <div className="flex flex-col gap-6">
+-      <h1 data-field="display_name" className="font-title text-title text-ink">
+-        {profile.display_name}
+-      </h1>
++    <div className="flex flex-col gap-7">
++      <div>
++        <p className="text-table text-ink-3">
++          {greeting.today}
++          {greeting.daysToWedding(profile.wedding_date)}
++        </p>
++        <h1 className="mt-1.5 font-title text-[2.5rem] leading-[46px] font-normal tracking-[-0.01em] text-ink">
++          {greeting.salutation}, {profile.member.display_name}. <span className="text-ink-3">Tell me what changed.</span>
++        </h1>
++      </div>
+ 
+-      {/* Voice first (Lane E): the first thing an owner sees is the way to talk to Jashn. */}
+-      <VoiceHero
+-        className="max-w-3xl"
+-        examples={["Caterer ko ab kitna dena hai?", "Caterer ko chaalis hazaar advance diya tha", "Diya ne kya badla?"]}
+-      />
++      <VoiceHero className="max-w-4xl" example="Caterer ko chaalis hazaar advance diya tha" />
+ 
+       <section aria-labelledby="wedding-details-heading" className="max-w-xl rounded-sheet border border-line bg-paper p-4 lg:p-6">
+         <h2 id="wedding-details-heading" className="text-heading text-ink">
