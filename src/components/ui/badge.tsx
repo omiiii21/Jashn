@@ -18,6 +18,12 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // Status chips (Lane E): always pair with an icon and a word.
+        paid: "h-6 rounded-chip bg-paid-tint px-2.5 text-meta text-paid",
+        due: "h-6 rounded-chip bg-due-tint px-2.5 text-meta text-due",
+        overdue: "h-6 rounded-chip bg-overdue-tint px-2.5 text-meta text-overdue",
+        proposal: "h-6 rounded-chip bg-proposal-tint px-2.5 text-meta text-proposal",
+        neutral: "h-6 rounded-chip bg-ivory-deep px-2.5 text-meta text-ink-2",
       },
     },
     defaultVariants: {
