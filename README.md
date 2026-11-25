@@ -8,6 +8,8 @@ Say it in Hindi, English or Hinglish, and Jashn keeps an Indian wedding's plans,
 
 Built in one day at FestiveHacks (BIEC Bengaluru, 25 November 2026), with Sarvam AI for voice, Flagsmith for the voice rollout and experiment, and NudgeBee for recovering failed exports.
 
+**Contents:** [What it does](#what-it-does) · [Screenshots](#screenshots) · [Working, partial, future](#working-partial-future) · [Try it](#try-it) · [Run it yourself](#run-it-yourself) · [How it works](#how-it-works) · [Project layout](#project-layout) · [Sarvam AI](#sarvam-ai) · [Flagsmith](#flagsmith) · [NudgeBee](#nudgebee) · [Privacy and roles](#privacy-and-roles) · [AI assistance](#ai-assistance) · [Credits](#credits)
+
 ## What it does
 
 1. **Voice setup.** Speak the couple's names, the date, the budget and the guest count. Jashn asks for anything missing, such as the year. You review it, then save.
@@ -19,6 +21,15 @@ Built in one day at FestiveHacks (BIEC Bengaluru, 25 November 2026), with Sarvam
 7. **Invitation and wedding website.** A maroon-and-gold invitation with the couple's photo, a published guest site, and an exported invitation card.
 8. **Owner and manager.** Two real logins. The owner sees the manager's changes, with who changed what and when, and approves publishing and spending.
 9. **Privacy by role.** A guest's link never shows money, vendors, or functions the guest isn't invited to. The server enforces this, not the screen.
+10. **Shagun register.** Record cash gifts as they come in, by voice or by typing ("Sharma ji ne 5,100 shagun diya").
+
+## Screenshots
+
+<!-- TODO(E, after the freeze): add the screenshots and the voice-turn GIF from docs/media/. -->
+
+| Voice setup | Money ledger | Guest invitation |
+|---|---|---|
+| _coming after the freeze_ | _coming after the freeze_ | _coming after the freeze_ |
 
 ## Working, partial, future
 
@@ -60,14 +71,30 @@ Open https://jashn-delta.vercel.app, sign up as a new owner, and speak a wedding
 - One Next.js 16 app on Vercel in Mumbai, with Supabase in Mumbai for Postgres, sign-in and private file storage.
 - The browser never talks to the database. Every change goes through one server-side command path, which checks the person's role, validates the input and records who changed what.
 - Screens stay live by polling: every 2.5 seconds on planner screens, every 10 seconds on the guest page, and whenever the tab regains focus.
+- Money is stored as whole rupees and shown in lakh grouping (₹12,00,000). Every date and time is shown in India time (Asia/Kolkata).
+- Invitation cards are rendered to images by headless Chrome on the server, as background export jobs.
+
+## Project layout
+
+| Path | What's there |
+|---|---|
+| `src/app/(planner)/w/[wedding_id]/` | The planner: functions, guests, money, vendors, shagun, invite and activity |
+| `src/app/(planner)/setup/` | Wedding setup, voice-first or form-first |
+| `src/app/(public)/i/[token]/` | A guest's private invitation and RSVP page |
+| `src/app/api/voice/` | Voice turns: record, review, confirm or cancel |
+| `src/contracts/` | Shared types: commands, read models, permissions, money formatting |
+| `src/server/` | Server-only code: the command dispatcher, read models, roles, voice, flags and export jobs |
+| `src/db/`, `drizzle/` | The Drizzle schema and its migrations |
+| `src/components/` | UI components, including the voice dock and the shared UI kit |
+| `scripts/seed.ts` | The fictional sample wedding |
+| `e2e/` | Playwright tests |
+| `docs/prep/` | The planning notes written before the hackathon; `decisions.md` is the final word |
 
 ## Sarvam AI
 
-<!-- TODO(L, 15:35): check each line against Lane C's merged code. -->
-
-- **Speech to text:** Saaras v4 in codemix mode, so Hinglish comes back the way people say it.
+- **Speech to text:** `saaras:v4` in codemix mode, so Hinglish comes back the way people say it.
 - **Understanding:** `sarvam-105b`, with one forced tool, `propose_actions`. The model only proposes. The app checks every value, the person confirms on a review card, and only then is anything saved.
-- **Spoken replies:** Bulbul reads back text that the app builds from saved records, never numbers the model made up.
+- **Spoken replies:** `bulbul:v4-flash` reads back text that the app builds from saved records, never numbers the model made up.
 - **What is sent:** the push-to-talk clip, and a compact snapshot of the one wedding the request is about. Audio is not stored.
 
 ## Flagsmith
@@ -75,7 +102,8 @@ Open https://jashn-delta.vercel.app, sign up as a new owner, and speak a wedding
 <!-- TODO(L, 15:35): flagsmith 7.8's points with real numbers: the three environments, the flags, the rollout log, the experiment with its real n, the synthetic run disclosed with its time and seed, the kill-switch flip log, and fail-closed behaviour. -->
 
 - **Kill switch:** turning off `voice_writes_enabled` stops voice writes. If Flagsmith can't be reached, voice writes fail closed, and typing still works.
-- **Rollout:** the voice pilot goes out to a percentage of owners.
+- **Rollout:** the `voice_pilot` flag goes out to a percentage of owners through the `voice_rollout` segment.
+- **Flags drawer:** internal accounts get a drawer that shows each flag's value, why it was chosen, and whether a fallback was used.
 - **Experiment:** new owners are split between voice-first and form-first setup.
 
 ## NudgeBee
@@ -107,6 +135,7 @@ We used AI assistants, as the rules allow. Claude Code with Claude Opus 5.5 wrot
 
 ## Credits
 
-- **Fonts:** Eczar, Anek Devanagari and Tiro Devanagari Hindi, from Google Fonts under the SIL Open Font License. <!-- TODO(L): update if Lane E's design PR changes the UI font. -->
+- **Fonts:** Geist and Geist Serif for the planner, with Eczar, Anek Devanagari and Tiro Devanagari Hindi for Hindi text and the invitation. All are under the SIL Open Font License; Geist Serif is committed in `public/brand/fonts/`, the rest load from Google Fonts.
+- **Icons:** [Phosphor](https://phosphoricons.com).
 - **Photo:** the couple portrait is AI-generated and fictional.
 - **Team:** [omiiii21](https://github.com/omiiii21) and [thesagniksaha](https://github.com/thesagniksaha).
