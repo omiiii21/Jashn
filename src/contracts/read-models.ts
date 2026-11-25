@@ -53,6 +53,7 @@ import type {
   VendorId,
   VendorStatus,
   VenueId,
+  WeddingNoteId,
   VoiceTurnId,
   WeddingId,
 } from "./domain";
@@ -156,6 +157,21 @@ export type ItineraryRequirement = {
   requirement_id: RequirementId;
   seed_key: SeedKey | null;
   label: string;
+};
+
+/** A fact the planner told the assistant (add_note), newest first. Shown and spoken as saved. */
+export type WeddingNote = {
+  note_id: WeddingNoteId;
+  seed_key: SeedKey | null;
+  topic: string;
+  note_text: string;
+  created_at: string;
+  created_by_name: string | null;
+};
+
+export type WeddingNotes = {
+  version: number;
+  notes: WeddingNote[];
 };
 
 export type ItineraryFunction = {
@@ -741,6 +757,7 @@ export type ReadModelMap = {
   money_summary: { params: NoParams; result: MoneySummary };
   vendor_ledger: { params: { vendor_id: VendorId }; result: VendorLedger };
   itinerary: { params: NoParams; result: Itinerary };
+  wedding_notes: { params: NoParams; result: WeddingNotes };
   rsvp_totals: { params: { event_id?: EventId }; result: RsvpTotals };
   rsvp_guest_list: { params: { event_id?: EventId }; result: RsvpGuestList };
   catering_estimate: { params: { vendor_id?: VendorId; event_id?: EventId }; result: CateringEstimate };
@@ -762,6 +779,7 @@ export const READ_MODEL_NAMES = [
   "money_summary",
   "vendor_ledger",
   "itinerary",
+  "wedding_notes",
   "rsvp_totals",
   "rsvp_guest_list",
   "catering_estimate",

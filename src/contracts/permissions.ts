@@ -61,6 +61,7 @@ export const COMMAND_PERMISSIONS: Record<CommandName, CommandPermission> = {
   record_expense: gated,
 
   add_requirement: both,
+  add_note: both,
   add_guest: { ...both, manager: "limited" },
   set_invitations: ownerOnly,
   set_rsvp: both,
@@ -130,6 +131,7 @@ export const READ_MODEL_PERMISSIONS: Record<ReadModelName, { owner: boolean; man
   wedding_profile: { owner: true, manager: "allow", guest: false },
   overview: { owner: true, manager: "allow", guest: false },
   itinerary: { owner: true, manager: "allow", guest: false },
+  wedding_notes: { owner: true, manager: "allow", guest: false },
   rsvp_totals: { owner: true, manager: "allow", guest: false },
   rsvp_guest_list: { owner: true, manager: "allow", guest: false },
   activity_feed: { owner: true, manager: "allow", guest: false },

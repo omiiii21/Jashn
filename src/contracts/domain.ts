@@ -44,6 +44,7 @@ export type CommitmentVersionId = string;
 export type PaymentId = string;
 export type PaymentVersionId = string;
 export type RequirementId = string;
+export type WeddingNoteId = string;
 export type ShagunEntryId = string;
 export type ProposalId = string;
 export type ActivityEntryId = string;
@@ -154,6 +155,7 @@ export const ENTITY_TYPES = [
   "commitment",
   "payment",
   "requirement",
+  "wedding_note",
   "shagun_entry",
   "proposal",
   "export_job",

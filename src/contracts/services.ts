@@ -92,6 +92,7 @@ import type {
   TeamView,
   UnpublishedChange,
   VendorLedger,
+  WeddingNotes,
   WeddingProfile,
 } from "./read-models";
 
@@ -1095,6 +1096,9 @@ function readModel(name: ReadModelName, fixture: DemoFixture, actor: SessionActo
       return buildVendorLedger(fixture, reader, String(params.vendor_id ?? ""));
     case "itinerary":
       return buildItinerary(fixture);
+    case "wedding_notes":
+      // The sample wedding has no notes; notes come from add_note on a live wedding.
+      return { version: fixture.wedding.version, notes: [] } satisfies WeddingNotes;
     case "rsvp_totals":
       return buildRsvpTotals(fixture, params.event_id as string | undefined);
     case "rsvp_guest_list":
