@@ -451,6 +451,9 @@ async function fillRefsFromTranscript(ctx: ResolveContext, access: ReadAccess): 
     for (const [pi, payment] of actions.entries()) {
       if (payment.kind !== "record_payment" || payment.vendor_id !== correction.vendor_id || typeof payment.amount_inr !== "number") continue;
       if (typeof correction.amount_inr !== "number") {
+        // Only the sentence's one amount moves: with two amounts said, both actions stay (main's ask).
+        const sole = soleAmount(transcript, typeof correction.previous_inr === "number" ? correction.previous_inr : null);
+        if (!sole || sole.value !== payment.amount_inr) continue;
         correction.amount_inr = payment.amount_inr;
         const heardAmount = (payment.heard ?? []).find((h) => h.field === "amount_inr");
         if (heardAmount) correction.heard = [...(correction.heard ?? []).filter((h) => h.field !== "amount_inr"), heardAmount];
@@ -475,7 +478,7 @@ async function fillRefsFromTranscript(ctx: ResolveContext, access: ReadAccess): 
   );
   // A question nobody asked (V-T4, O-01: a query_budget next to "Caterer को अब कितना देना है?").
   const keep = actions.map((action) => {
-    if (action.kind === "query_balance" && typeof action.user_claim_inr === "number" && paidAmounts.has(action.user_claim_inr)) return false;
+    if (action.kind === "query_balance" && typeof action.user_claim_inr === "number" && paidAmounts.has(action.user_claim_inr) && !BALANCE_ASK_WORDS.some((word) => hasWords(transcript, word)) && !transcript.includes("?")) return false;
     if (splitPayments.has(actions.indexOf(action))) return false;
     const cues = ASK_CUES[action.kind];
     return !cues || cues.some((word) => hasWords(transcript, word));
@@ -550,6 +553,9 @@ const ASK_CUES: Partial<Record<ActionKind, string[]>> = {
 
 const TODAY_WORDS = ["today", "aaj", "aj", "आज"];
 
+/** Words of a balance question: with one of these, a claim is a question to answer, not noise. */
+const BALANCE_ASK_WORDS = ["baaki", "baki", "बाकी", "बाक़ी", "kitna", "कितना", "kitne", "कितने", "left", "owe", "remaining", "pending", "dena", "देना"];
+
 /** Numeric fields code can find words for, and how each is read (3.2). */
 const HEARD_FALLBACK: [string, (phrase: string) => number | null][] = [
   ["amount_inr", readAmount],
@@ -582,6 +588,21 @@ function spanReading(transcript: string, value: number, read: (phrase: string) =
   return null;
 }
 
+/** Words that make a number money: a scale word or a rupee word. */
+const MONEY_WORDS = ["hazaar", "hazar", "hajar", "हज़ार", "हजार", "thousand", "lakh", "lac", "lakhs", "लाख", "crore", "करोड़", "करोड", "rupaye", "rupees", "रुपये", "rs"];
+
+/**
+ * A span that says money: it ends on a scale or rupee word ("chaalis hazaar", not "chaalis hazaar
+ * do", where "do" is "give"), or is a ₹ figure or an Indian-grouped figure ("40,000"). A bare
+ * "2026" or "300" is a year or a count, never an amount read by code.
+ */
+function moneyLike(phrase: string): boolean {
+  const words = phrase.split(/\s+/);
+  const last = normalizeForMatch(words[words.length - 1] ?? "");
+  if (MONEY_WORDS.some((word) => normalizeForMatch(word) === last)) return true;
+  return words.length === 1 && /^(₹\s?)?[0-9०-९]{1,3}([,][0-9०-९]{2,3})+$|^₹\s?[0-9०-९]+$/.test(words[0]);
+}
+
 /** Payment writes whose amount_inr is the money the sentence says was paid. */
 const PAYMENT_KINDS = new Set<string>(["record_payment", "correct_payment"]);
 
@@ -596,7 +617,7 @@ export function soleAmount(transcript: string, previous: number | null): { value
     for (let start = 0; start + size <= words.length; start += 1) {
       const phrase = words.slice(start, start + size).join(" ");
       const value = readAmount(phrase);
-      if (value !== null && value >= 100) spans.push({ start, end: start + size, value, phrase });
+      if (value !== null && value >= 100 && moneyLike(phrase)) spans.push({ start, end: start + size, value, phrase });
     }
   }
   const candidates = spans.filter((span) => span.value !== previous);

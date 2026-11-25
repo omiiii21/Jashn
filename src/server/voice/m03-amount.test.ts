@@ -66,10 +66,41 @@ describe("soleAmount", () => {
     expect(soleAmount("Caterer को 40,000 advance दिया था।", null)).toEqual({ value: 40000, phrase: "40,000" });
     expect(soleAmount("Caterer ko चालीस हज़ार advance diya tha", null)?.value).toBe(40000);
   });
+  it("never reads a year, a count or a trailing \"do\" as money", () => {
+    expect(soleAmount("Caterer ko 25 Nov 2026 ko advance diya.", null)).toBeNull();
+    expect(soleAmount("Caterer ko 300 logon ke liye advance diya", null)).toBeNull();
+    expect(soleAmount("Caterer ko chaalis hazaar do na", null)).toEqual({ value: 40000, phrase: "chaalis hazaar" });
+    expect(soleAmount("15 Nov 2026 ko caterer ko bees hazaar diye", null)?.value).toBe(20000);
+  });
   it("leaves out the old amount, and gives up on two different amounts or none", () => {
     expect(soleAmount("pachaas hazaar nahi, chaalis hazaar diya tha", 50000)?.value).toBe(40000);
     expect(soleAmount("bees hazaar aur tees hazaar diye", null)).toBeNull();
     expect(soleAmount("Caterer ko advance diya tha", null)).toBeNull();
+  });
+});
+
+async function resolveFor(tool: ToolArguments, transcript: string) {
+  const actor = { ...fixtureSessionActor("mira", "demo"), wedding_id: fixtureIds("demo").wedding_id };
+  const snapshot = await buildSnapshot({ actor, wedding_id: actor.wedding_id, context: null, attached_asset_id: null });
+  return resolveTurn({ actor, wedding_id: actor.wedding_id, tool: cleanToolArguments(structuredClone(tool)), snapshot, transcript, register: "hinglish", ui_language: "en", writes_enabled: true, context: null, page: null, setup_opened_at: null });
+}
+
+describe("the rules stay out of other sentences (review, 15:50)", () => {
+  it("keeps a correction and a different new payment apart when two amounts are said", async () => {
+    const outcome = await resolveFor({ intent: "act", actions: [{ kind: "correct_payment", vendor_id: "VEN-CAT", payment_id: "PAY-01", payment_kind: "advance", previous_inr: 50000 }, { kind: "record_payment", vendor_id: "VEN-CAT", amount_inr: 20000 }], missing_fields: [], reply: "", reply_language: "hinglish" }, "Caterer ka advance chaalis hazaar tha, aur aaj bees hazaar aur diye.");
+    const amounts = outcome.kind === "preview" || outcome.kind === "clarify" ? outcome.actions.map((a) => a.input.amount_inr) : [];
+    expect(amounts).not.toEqual([20000]);
+  });
+  it("keeps a real balance question whose claim equals the amount paid", async () => {
+    const outcome = await resolveFor({ intent: "act", actions: [{ kind: "record_payment", vendor_id: "VEN-CAT", amount_inr: 20000, heard: [{ field: "amount_inr", phrase: "bees hazaar" }] }, { kind: "query_balance", vendor_id: "VEN-CAT", scope: "vendor", user_claim_inr: 20000, heard: [{ field: "user_claim_inr", phrase: "bees hazaar" }] }], missing_fields: [], reply: "", reply_language: "hinglish" }, "Caterer ko bees hazaar diye, ab bees hazaar baaki hai na?");
+    // As on main: the question is answered in the reply beside the payment card.
+    expect(outcome.kind).toBe("preview");
+    if (outcome.kind === "preview") expect(outcome.reply.display_text).toMatch(/baaki hai/);
+  });
+  it("never saves a year as rupees on a payment with no amount", async () => {
+    const outcome = await resolveFor({ intent: "act", actions: [{ kind: "record_payment", vendor_id: "VEN-CAT", payment_kind: "advance", date_text: "15 Nov 2026" }], missing_fields: ["0:amount_inr"], reply: "", reply_language: "hinglish" }, "15 Nov 2026 ko caterer ko advance diya");
+    const amount = outcome.kind === "preview" || outcome.kind === "clarify" ? outcome.actions[0]?.input.amount_inr : undefined;
+    expect(amount).not.toBe(2026);
   });
 });
 
