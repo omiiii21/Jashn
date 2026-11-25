@@ -1,19 +1,20 @@
 /* The guest card's one authored moment (design-direction 7.3): the gold foil hairline
    draws around the card on first open, like foil being pressed. The content is visible
-   from the start; the line's resting state is fully drawn, so a browser without the
-   animation still shows it. Off under reduced motion. */
+   from the start. The dash pattern lives only in the keyframes and the animation does
+   not fill forwards, so the resting line is a plain solid stroke: a browser that
+   ignores `pathLength` on <rect> never shows a dotted line. Off under reduced motion. */
 
 .foil {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 0;
-  animation: foil-draw var(--jashn-dur-foil, 700ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: foil-draw var(--jashn-dur-foil, 700ms) cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 @keyframes foil-draw {
   from {
+    stroke-dasharray: 1;
     stroke-dashoffset: 1;
   }
   to {
+    stroke-dasharray: 1;
     stroke-dashoffset: 0;
   }
 }
@@ -23,4 +24,3 @@
     animation: none;
   }
 }
-
