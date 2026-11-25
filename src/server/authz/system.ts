@@ -22,12 +22,13 @@ import type { SystemVerifier } from "@/contracts/services";
 /** The actor every verified ops request runs as (architecture 3.3's transport table). */
 export const OPS_SYSTEM_ACTOR: Readonly<SystemActor> = Object.freeze({ kind: "system", label: "NudgeBee" });
 
-const BEARER = /^Bearer[ \t]+(\S+)[ \t]*$/i;
+/** Exactly `Bearer <token>`: one space, no surrounding or extra whitespace (EX-05). The scheme is case-insensitive (RFC 9110). */
+const BEARER = /^Bearer (\S+)$/i;
 
 /** The bearer token from an `Authorization` header, or null. */
 export function bearerToken(authorization_header: string | null | undefined): string | null {
   if (typeof authorization_header !== "string") return null;
-  const match = BEARER.exec(authorization_header.trim());
+  const match = BEARER.exec(authorization_header);
   return match ? match[1] : null;
 }
 
