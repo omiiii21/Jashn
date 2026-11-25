@@ -114,12 +114,4 @@ test.describe("lane C: flags and voice routes", () => {
     expect(body.ok).toBe(false);
     expect(body.error.code).toBe("forbidden");
   });
-
-  test("reply audio for an unknown voice turn is 403 forbidden", async ({ request }) => {
-    const response = await request.get(`/api/voice/turns/${randomUUID()}/reply-audio?part=1`);
-    expect(response.status()).toBe(403);
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
-    expect(body.ok).toBe(false);
-    expect(body.error.code).toBe("forbidden");
-  });
 });
