@@ -25,6 +25,8 @@ import type { DbOrTx } from "@/db/client";
 import { isUuidShaped } from "@/db/ids";
 import { weddings } from "@/db/schema";
 import { getSignedInUser, loadMemberActor } from "@/server/auth/session";
+import { guestNotFoundResponse, resolveGuestToken } from "./guest-token";
+import { verifySystemToken } from "./system";
 
 /**
  * The one server guard (architecture 3.3, domain 6.1–6.2). Everything here applies the
@@ -223,7 +225,7 @@ export async function requireMemberForApi(wedding_id: string): Promise<ApiActorR
 }
 
 // ---------------------------------------------------------------------------
-// Guest and system actors (14:45: the resolver and verifier plug in here)
+// Guest and system actors
 // ---------------------------------------------------------------------------
 
 /** Until A2's 14:45 part lands, no guest token resolves (every guest route answers its 404). */
@@ -235,17 +237,18 @@ export const pendingSystemVerifier: SystemVerifier = async () => null;
 /** The guest actor for a raw token, or the one 404 body every guest failure shares (G5). */
 export async function requireGuestForApi(
   token: string,
-  resolve: GuestTokenResolver = pendingGuestTokenResolver,
+  resolve: GuestTokenResolver = resolveGuestToken,
 ): Promise<ApiActorResult<GuestActor>> {
   const actor = await resolve(token);
-  if (!actor) return { ok: false, response: errorResponse(body("not_found", GUARD_MESSAGES.guest_not_found)) };
+  // One body and one set of headers for every guest failure (G5, G6; AT-9.4, AT-9.5).
+  if (!actor) return { ok: false, response: guestNotFoundResponse() };
   return { ok: true, actor };
 }
 
 /** The `system` actor for an `Authorization` header, or 401 `unauthenticated` (3.7). */
 export async function requireSystemForApi(
   authorization: string | null,
-  verify: SystemVerifier = pendingSystemVerifier,
+  verify: SystemVerifier = verifySystemToken,
 ): Promise<ApiActorResult<SystemActor>> {
   const actor = await verify(authorization);
   if (!actor) return { ok: false, response: errorResponse(body("unauthenticated", GUARD_MESSAGES.unauthenticated)) };
