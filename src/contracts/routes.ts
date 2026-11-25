@@ -45,8 +45,10 @@ export type PlannerSection = (typeof PLANNER_SECTIONS)[number];
 
 export const routes = {
   // Pages ------------------------------------------------------------------
-  /** The root redirect: your wedding, `/setup` or `/login`. */
-  home: () => "/",
+  /** The public landing page. */
+  landing: () => "/",
+  /** The app entry redirect: your wedding, `/setup` or `/login`. */
+  home: () => "/app",
   login: () => "/login",
   signup: () => "/signup",
   /** Setup: voice-first or form-first (Lane C). No poll and no focus refresh (D79). */

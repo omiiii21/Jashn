@@ -1,0 +1,381 @@
+/*
+ * Landing page motion (global, `jl-` prefixed: next.config.ts runs every *.css through
+ * Tailwind as plain CSS, so CSS modules are not hashed here).
+ * Motion (DESIGN.md "Motion"). Arrivals decelerate on ease-arrive, the foil
+ * draws once, the correction strike draws in 200 ms, and with reduced motion everything is
+ * an opacity change only. Elements hidden for a reveal stay visible when scripting is off.
+ */
+
+.jl-root {
+  --arrive: cubic-bezier(0.16, 1, 0.3, 1);
+  --leave: cubic-bezier(0.5, 0, 0.75, 0);
+}
+
+/* ---------- Hero: load sequence ---------- */
+
+.jl-line {
+  display: block;
+  overflow: hidden;
+  /* room for descenders inside the mask */
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+
+.jl-lineInner {
+  display: block;
+  animation: jl-kf-line-up 1100ms var(--arrive) both;
+  animation-delay: calc(120ms + var(--i, 0) * 110ms);
+}
+
+@keyframes jl-kf-line-up {
+  from {
+    transform: translateY(105%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.jl-fadeUp {
+  animation: jl-kf-fade-up 900ms var(--arrive) both;
+  animation-delay: calc(500ms + var(--i, 0) * 90ms);
+}
+
+@keyframes jl-kf-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The card stack: the main card lifts in, the inserts fan out from behind it. */
+.jl-cardIn {
+  animation: jl-kf-card-in 1200ms var(--arrive) both;
+  animation-delay: 250ms;
+}
+
+@keyframes jl-kf-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(48px) rotate(-2deg) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.jl-fan {
+  transform: translate(var(--x, 0), var(--y, 0)) rotate(var(--r, 0deg));
+  animation: jl-kf-fan-out 1300ms var(--arrive) both;
+  animation-delay: calc(700ms + var(--i, 0) * 120ms);
+}
+
+@keyframes jl-kf-fan-out {
+  from {
+    opacity: 0;
+    transform: translate(0, 24px) rotate(0deg);
+  }
+  to {
+    opacity: 1;
+    transform: translate(var(--x, 0), var(--y, 0)) rotate(var(--r, 0deg));
+  }
+}
+
+/* The foil frame: a 1 px gold hairline that draws once (700 ms). */
+.jl-foil {
+  fill: none;
+  stroke: var(--jashn-gold);
+  stroke-width: 1;
+  animation: jl-kf-foil-draw 700ms var(--arrive) backwards;
+  animation-delay: 1000ms;
+}
+
+@keyframes jl-kf-foil-draw {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Pointer tilt on the hero card (set by TiltCard). */
+.jl-tilt {
+  transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 600ms var(--arrive);
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* The जश्न watermark drifts as the page scrolls, where scroll timelines exist. */
+@supports (animation-timeline: scroll()) {
+  .jl-drift {
+    animation: jl-kf-drift linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 100vh;
+  }
+}
+
+@keyframes jl-kf-drift {
+  to {
+    transform: translateY(18%) translateX(-4%);
+  }
+}
+
+/* ---------- Scroll reveals (Reveal sets data-shown) ---------- */
+
+@media (scripting: enabled) {
+  [data-shown="false"] .jl-rise {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+.jl-rise {
+  transition:
+    opacity 900ms var(--arrive),
+    transform 900ms var(--arrive);
+  transition-delay: calc(var(--i, 0) * 80ms);
+}
+
+/* Section titles: a mask wipe, line by line. */
+@media (scripting: enabled) {
+  [data-shown="false"] .jl-wipe > span {
+    transform: translateY(105%);
+  }
+}
+
+.jl-wipe {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.1em;
+  margin-bottom: -0.1em;
+}
+
+.jl-wipe > span {
+  display: block;
+  transition: transform 1000ms var(--arrive);
+  transition-delay: calc(var(--i, 0) * 100ms);
+}
+
+/* ---------- The correction strike (khata) ---------- */
+
+.jl-strike {
+  position: relative;
+  display: inline-block;
+  color: var(--jashn-ink-3);
+}
+
+.jl-strike::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 52%;
+  height: 1.5px;
+  background: var(--jashn-ink-3);
+  transform-origin: left center;
+  transform: scaleX(1);
+  transition: transform 200ms var(--arrive);
+  transition-delay: 900ms;
+}
+
+@media (scripting: enabled) {
+  [data-shown="false"] .jl-strike::after {
+    transform: scaleX(0);
+  }
+  [data-shown="false"] .jl-corrected {
+    opacity: 0;
+  }
+}
+
+.jl-corrected {
+  transition: opacity 150ms var(--arrive);
+  transition-delay: 1100ms;
+}
+
+/* Totals that depend on the correction get the jl-kf-wash, 60 ms apart. */
+[data-shown="true"] .jl-washAfter {
+  animation: jl-kf-wash 2920ms linear both;
+  animation-delay: calc(1250ms + var(--i, 0) * 60ms);
+}
+
+@keyframes jl-kf-wash {
+  4%,
+  59% {
+    background-color: var(--jashn-wash);
+  }
+}
+
+/* The segmented bar grows from the left once the table is in view. */
+.jl-segment {
+  transform-origin: left center;
+  transition: transform 1100ms var(--arrive);
+  transition-delay: calc(300ms + var(--i, 0) * 120ms);
+}
+
+@media (scripting: enabled) {
+  [data-shown="false"] .jl-segment {
+    transform: scaleX(0);
+  }
+}
+
+/* ---------- The card section: inserts fan as they scroll into view ---------- */
+
+.jl-insert {
+  transform: translateY(var(--y, 0)) rotate(var(--r, 0deg));
+  transition:
+    transform 1200ms var(--arrive),
+    opacity 900ms var(--arrive);
+  transition-delay: calc(var(--i, 0) * 140ms);
+}
+
+@media (scripting: enabled) {
+  [data-shown="false"] .jl-insert {
+    opacity: 0;
+    transform: translateY(80px) rotate(0deg);
+  }
+}
+
+.jl-insert:hover {
+  transform: translateY(calc(var(--y, 0px) - 10px)) rotate(0deg);
+  transition-delay: 0ms;
+}
+
+/* ---------- Voice demo ---------- */
+
+.jl-word {
+  display: inline-block;
+  transition:
+    opacity 260ms var(--arrive),
+    filter 260ms var(--arrive);
+}
+
+.jl-word[data-on="false"] {
+  opacity: 0;
+  filter: blur(4px);
+}
+
+.jl-span {
+  border-radius: 4px;
+  padding: 0 3px;
+  margin: 0 -1px;
+  transition: background-color 120ms linear;
+}
+
+.jl-span[data-hl="false"] {
+  background-color: transparent !important;
+}
+
+.jl-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+}
+
+.jl-meter > i {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--jashn-maroon);
+  height: var(--h, 6px);
+  transform-origin: center;
+}
+
+.jl-meter[data-live="true"] > i {
+  animation: jl-kf-level 640ms ease-in-out infinite alternate;
+  animation-delay: calc(var(--i, 0) * -90ms);
+}
+
+@keyframes jl-kf-level {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.jl-caught {
+  transition:
+    opacity 240ms var(--arrive),
+    transform 240ms var(--arrive);
+  transition-delay: calc(var(--i, 0) * 120ms);
+}
+
+.jl-caught[data-on="false"] {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+/* ---------- Reduced motion: opacity only, no foil draw ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .jl-lineInner,
+  .jl-fadeUp,
+  .jl-cardIn,
+  .jl-fan {
+    animation-name: jl-kf-fade-only;
+    animation-duration: 300ms;
+  }
+  .jl-fan {
+    transform: translate(var(--x, 0), var(--y, 0)) rotate(var(--r, 0deg));
+  }
+  .jl-foil {
+    animation: none;
+  }
+  .jl-drift,
+  .jl-meter[data-live="true"] > i,
+  [data-shown="true"] .jl-washAfter {
+    animation: none;
+  }
+  .jl-tilt {
+    transform: none;
+    transition: none;
+  }
+  .jl-rise,
+  .jl-wipe > span,
+  .jl-insert,
+  .jl-segment,
+  .jl-caught,
+  .jl-word {
+    transition-property: opacity;
+    transition-duration: 300ms;
+  }
+  [data-shown="false"] .jl-rise,
+  [data-shown="false"] .jl-wipe > span,
+  [data-shown="false"] .jl-insert,
+  [data-shown="false"] .jl-segment,
+  .jl-caught[data-on="false"] {
+    transform: none;
+  }
+  [data-shown="false"] .jl-wipe > span {
+    opacity: 0;
+  }
+  .jl-word[data-on="false"] {
+    filter: none;
+  }
+  .jl-insert:hover {
+    transform: translateY(var(--y, 0)) rotate(var(--r, 0deg));
+  }
+  .jl-strike::after {
+    transition: none;
+  }
+}
+
+@keyframes jl-kf-fade-only {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
