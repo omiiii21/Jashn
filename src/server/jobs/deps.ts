@@ -1,18 +1,15 @@
 import "server-only";
 
-import { RenderError, renderCardPng, renderErrorMessage } from "@/server/export/chromium";
-import { mintRenderToken } from "@/server/export/render-token";
 import { readEnvironmentFlags } from "@/server/flags";
-import { routes } from "@/contracts/routes";
 import type { PublicationSnapshot, WeddingId } from "@/contracts/domain";
 import type { AppendActivity, BumpVersion, SigningHelpers } from "@/contracts/services";
 import type { CardPhoto } from "@/components/invite/card-model";
 
-import { selfBaseUrl } from "./base-url";
 import type { JobDeps } from "./handlers";
 import type { JobStore } from "./store";
 import { sendFirstFailureWebhook, type WebhookDeps } from "./webhook";
-import { JobRenderFailure, type WorkerDeps } from "./worker";
+import { renderJob } from "./render-job";
+import type { WorkerDeps } from "./worker";
 
 /**
  * The single switch point from Lane D's temporary pieces to Lane A's (D58, D102). It never
@@ -81,17 +78,7 @@ export const webhookDeps: WebhookDeps<unknown> = {
 export const workerDeps: WorkerDeps<unknown> = {
   ...jobDeps,
   now: () => new Date(),
-  async render(job, renderer, cap_ms) {
-    void renderer; // The og fallback joins from lane-d-og-fallback; Chromium stays selected.
-    const url = `${selfBaseUrl()}${routes.renderCard(job.id, mintRenderToken(job.id))}`;
-    try {
-      const { png, timings } = await renderCardPng({ url, cap_ms });
-      return { png, timings: { ...timings } };
-    } catch (error) {
-      if (error instanceof RenderError) throw new JobRenderFailure(error.code, renderErrorMessage(error));
-      throw new JobRenderFailure("RENDER_FAILED", "The renderer failed");
-    }
-  },
+  render: (job, renderer, cap_ms) => renderJob({ store: jobDeps.store, photo: cardPhotoFor }, job, renderer, cap_ms),
   upload: uploadExport,
   notifyFailure: async (job_id) => {
     await sendFirstFailureWebhook(webhookDeps, job_id);

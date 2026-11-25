@@ -79,9 +79,10 @@ export function drillArmed(candidate: string, wedding: { id: WeddingId; is_sampl
   return candidate !== "" && candidate === wedding.id && wedding.is_sample;
 }
 
-/** The renderer the claim records (3.7): `og` only when the flag says so. */
+/** The renderer the claim records (3.7): `og` only for an enabled flag whose value is `og`. */
 export function rendererFrom(flags: Pick<EnvironmentFlags, "card_renderer">): ExportRenderer {
-  return flags.card_renderer.value === "og" ? "og" : "chromium";
+  const flag = flags.card_renderer;
+  return flag?.enabled && flag.value?.trim().toLowerCase() === "og" ? "og" : "chromium";
 }
 
 /** An instant as ops JSON writes it: UTC, no milliseconds (5.1). */

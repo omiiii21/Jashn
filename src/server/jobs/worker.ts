@@ -49,7 +49,8 @@ export async function claimJob<Tx>(deps: WorkerDeps<Tx>, job_id: string): Promis
   const first = await deps.store.readJob(null, job_id);
   if (!first) return { kind: "not_found" };
   if (first.status !== "queued") return { kind: "not_started", status: first.status };
-  const renderer = rendererFrom(await deps.readFlags());
+  // An unreadable flag reader never blocks a claim: Chromium stays the renderer.
+  const renderer = await deps.readFlags().then(rendererFrom, () => "chromium" as const);
 
   return deps.store.transaction(async (tx): Promise<ClaimResult> => {
     await deps.store.lockWedding(tx, first.wedding_id);
