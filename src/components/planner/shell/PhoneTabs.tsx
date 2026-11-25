@@ -5,9 +5,17 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import type { WeddingId } from "@/contracts/domain";
+import { useNewChanges } from "../activity/useNewChanges";
 import { cx } from "../kit/cx";
 
-import { PRIMARY_SECTIONS, SECTION_TITLES, activeSection, sectionHref } from "./nav-items";
+import {
+  PRIMARY_SECTIONS,
+  SECTION_TITLES,
+  activeSection,
+  sectionHref,
+  type NavSection,
+  type SectionSeqs,
+} from "./nav-items";
 
 /**
  * The phone's six-tab row under the header (design-direction 10.1): Anek at width 85,
@@ -16,8 +24,18 @@ import { PRIMARY_SECTIONS, SECTION_TITLES, activeSection, sectionHref } from "./
  * a gold underline. The row scrolls inside itself when it doesn't fit, never the page, and
  * keeps the active tab in view.
  */
-export function PhoneTabs({ wedding_id, className }: { wedding_id: WeddingId; className?: string }) {
+export function PhoneTabs({
+  wedding_id,
+  className,
+  latest = {},
+}: {
+  wedding_id: WeddingId;
+  className?: string;
+  /** The newest activity seq per section, for the gold dot (brief B3). */
+  latest?: SectionSeqs;
+}) {
   const current = activeSection(usePathname(), wedding_id);
+  const fresh = useNewChanges(wedding_id, current as NavSection | null, latest);
   const activeRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
@@ -49,6 +67,11 @@ export function PhoneTabs({ wedding_id, className }: { wedding_id: WeddingId; cl
                 )}
               >
                 {SECTION_TITLES[section]}
+                {fresh.has(section) ? (
+                  <span className="ml-1 size-2 rounded-full bg-gold">
+                    <span className="sr-only">, new changes</span>
+                  </span>
+                ) : null}
               </Link>
             </li>
           );

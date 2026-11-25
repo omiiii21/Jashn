@@ -30,6 +30,12 @@ import type {
   VendorMoneyFigures,
 } from "@/contracts/read-models";
 import { routes } from "@/contracts/routes";
+import type { Dispatch } from "@/components/planner/forms/command";
+import { CommitmentForm } from "@/components/planner/money/CommitmentForm";
+import { PaymentActions } from "@/components/planner/money/PaymentActions";
+import { RecordPaymentForm } from "@/components/planner/money/RecordPaymentForm";
+import type { VoicePrefillEntry } from "@/contracts/commands";
+import type { MemberRole } from "@/contracts/domain";
 
 import {
   VENDOR_STATUS_LABELS,
@@ -42,6 +48,15 @@ import {
   previousVersion,
   quoteFormula,
 } from "./vendor-text";
+
+/** What the money forms need (B2): the member's role and name and the dispatch action. */
+export type LedgerActions = {
+  role: MemberRole;
+  actor_name: string;
+  dispatch: Dispatch;
+  /** A voice prefill entry for one of this page's forms (voice.md 6.3). */
+  prefill?: VoicePrefillEntry;
+};
 
 const SHEET = "rounded-sheet border border-line bg-paper p-4 lg:p-6";
 const LINK = "text-maroon underline underline-offset-4 hover:text-maroon-deep";
@@ -181,7 +196,15 @@ function ContractBlock({
   );
 }
 
-function ContractSection({ ledger }: { ledger: VendorLedger }) {
+function ContractSection({
+  wedding_id,
+  ledger,
+  actions,
+}: {
+  wedding_id: WeddingId;
+  ledger: VendorLedger;
+  actions?: LedgerActions;
+}) {
   const commitments = ledger.commitments ?? [];
   const history = ledger.history ?? [];
   return (
@@ -202,10 +225,38 @@ function ContractSection({ ledger }: { ledger: VendorLedger }) {
           {commitments.map((commitment) => (
             <li key={commitment.commitment_id}>
               <ContractBlock commitment={commitment} history={history} />
+              {actions && !commitment.voided ? (
+                <div className="mt-2">
+                  <CommitmentForm
+                    wedding_id={wedding_id}
+                    vendor_id={ledger.vendor.vendor_id}
+                    commitment={commitment}
+                    role={actions.role}
+                    actor_name={actions.actor_name}
+                    dispatch={actions.dispatch}
+                    prefill={
+                      actions.prefill?.command === "update_commitment" &&
+                      actions.prefill.input.commitment_id === commitment.commitment_id
+                        ? actions.prefill
+                        : undefined
+                    }
+                  />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
       )}
+      {actions ? (
+        <CommitmentForm
+          wedding_id={wedding_id}
+          vendor_id={ledger.vendor.vendor_id}
+          role={actions.role}
+          actor_name={actions.actor_name}
+          dispatch={actions.dispatch}
+          prefill={actions.prefill?.command === "record_commitment" ? actions.prefill : undefined}
+        />
+      ) : null}
     </section>
   );
 }
@@ -237,13 +288,21 @@ function estimateBoxes(ledger: VendorLedger): ReactNode[] {
   return boxes;
 }
 
-function PaymentRow({ payment }: { payment: PaymentView }) {
+function PaymentRow({
+  wedding_id,
+  payment,
+  actions,
+}: {
+  wedding_id: WeddingId;
+  payment: PaymentView;
+  actions?: LedgerActions;
+}) {
   const kind = PAYMENT_KIND_LABELS[payment.payment_kind];
   const corrected = payment.previous_amount_inr !== null;
   return (
-    <li className="flex items-start justify-between gap-4 py-3">
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className={`text-body ${payment.voided ? "text-ink-3 line-through decoration-ink-3" : "text-ink"}`}>
+    <li className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p id={`payment-${payment.payment_id}`} className={`text-body ${payment.voided ? "text-ink-3 line-through decoration-ink-3" : "text-ink"}`}>
           {kind.en}{" "}
           <span lang="hi" className={`no-underline ${payment.voided ? "text-ink-3" : "text-ink-2"}`}>
             {kind.hi}
@@ -273,12 +332,39 @@ function PaymentRow({ payment }: { payment: PaymentView }) {
           <Amount inr={payment.amount_inr} field="payments.amount_inr" className="text-ink" />
         )}
       </Wash>
+      {/* Full row on every width, so the correction form never squeezes beside the amount. */}
+      {actions ? (
+        <div className="min-w-0 basis-full">
+          <PaymentActions
+            wedding_id={wedding_id}
+            described_by={`payment-${payment.payment_id}`}
+            payment={payment}
+            role={actions.role}
+            actor_name={actions.actor_name}
+            dispatch={actions.dispatch}
+            prefill={
+              actions.prefill?.command === "correct_payment" && actions.prefill.input.payment_id === payment.payment_id
+                ? actions.prefill
+                : undefined
+            }
+          />
+        </div>
+      ) : null}
     </li>
   );
 }
 
-function PaymentsSection({ ledger }: { ledger: VendorLedger }) {
+function PaymentsSection({
+  wedding_id,
+  ledger,
+  actions,
+}: {
+  wedding_id: WeddingId;
+  ledger: VendorLedger;
+  actions?: LedgerActions;
+}) {
   const payments = ledger.payments ?? [];
+  const commitment = (ledger.commitments ?? []).find((item) => !item.voided) ?? null;
   return (
     <section aria-labelledby="vendor-payments" className="flex flex-col gap-1">
       <SectionHeading id="vendor-payments" meta={payments.length > 1 ? `${payments.length} payments` : undefined}>
@@ -289,10 +375,24 @@ function PaymentsSection({ ledger }: { ledger: VendorLedger }) {
       ) : (
         <ul className="divide-y divide-line">
           {payments.map((payment) => (
-            <PaymentRow key={payment.payment_id} payment={payment} />
+            <PaymentRow key={payment.payment_id} wedding_id={wedding_id} payment={payment} actions={actions} />
           ))}
         </ul>
       )}
+      {actions ? (
+        <div className="pt-3">
+          <RecordPaymentForm
+            wedding_id={wedding_id}
+            vendor_id={ledger.vendor.vendor_id}
+            vendor_name={ledger.vendor.name}
+            commitment_id={commitment?.commitment_id ?? null}
+            role={actions.role}
+            actor_name={actions.actor_name}
+            dispatch={actions.dispatch}
+            prefill={actions.prefill?.command === "record_payment" ? actions.prefill : undefined}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -419,14 +519,26 @@ function HistorySection({ ledger }: { ledger: VendorLedger }) {
  * estimate take a second column beside the quote and the contract, so the amounts on the
  * left share one right edge. In one column the estimate falls under the contract.
  */
-function LedgerSheet({ ledger, figures, row }: { ledger: VendorLedger; figures: VendorMoneyFigures; row: MoneySummaryVendorRow | null }) {
+function LedgerSheet({
+  wedding_id,
+  ledger,
+  figures,
+  row,
+  actions,
+}: {
+  wedding_id: WeddingId;
+  ledger: VendorLedger;
+  figures: VendorMoneyFigures;
+  row: MoneySummaryVendorRow | null;
+  actions?: LedgerActions;
+}) {
   const boxes = estimateBoxes(ledger);
   const hasQuote = (ledger.quotes ?? []).length > 0;
   const { due, tone } = balanceStatus(ledger, figures, row);
   const lead = <OwedLead figures={figures} due={due} tone={tone} />;
   const quote = hasQuote ? <QuoteSection ledger={ledger} /> : null;
-  const contract = <ContractSection ledger={ledger} />;
-  const payments = <PaymentsSection ledger={ledger} />;
+  const contract = <ContractSection wedding_id={wedding_id} ledger={ledger} actions={actions} />;
+  const payments = <PaymentsSection wedding_id={wedding_id} ledger={ledger} actions={actions} />;
   const balance = <BalanceSection figures={figures} tone={tone} />;
 
   if (boxes.length === 0) {
@@ -465,10 +577,13 @@ export function VendorLedgerView({
   wedding_id,
   ledger,
   row,
+  actions,
 }: {
   wedding_id: WeddingId;
   ledger: VendorLedger;
   row: MoneySummaryVendorRow | null;
+  /** The money forms; left out, the page is read-only. */
+  actions?: LedgerActions;
 }) {
   const figures = ledger.hidden.includes("vendor_money") ? undefined : ledger.figures;
   return (
@@ -488,7 +603,7 @@ export function VendorLedgerView({
         </section>
       ) : (
         <>
-          <LedgerSheet ledger={ledger} figures={figures} row={row} />
+          <LedgerSheet wedding_id={wedding_id} ledger={ledger} figures={figures} row={row} actions={actions} />
           <HistorySection ledger={ledger} />
         </>
       )}
