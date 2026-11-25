@@ -1,14 +1,14 @@
-import { redirect } from "next/navigation";
-import { connection } from "next/server";
+import type { Metadata } from "next";
 
-import { homePathFor } from "@/server/auth/redirects";
-import { getSession } from "@/server/auth/session";
+import { LandingPage } from "@/components/landing/landing-page";
 
-/**
- * The root redirect (architecture 4.1): signed out → /login; a member → their first
- * wedding's home; signed in with no wedding yet → /setup.
- */
-export default async function Home() {
-  await connection();
-  redirect(homePathFor(await getSession()));
+export const metadata: Metadata = {
+  title: "Jashn · Plan the whole wedding by saying it out loud",
+  description:
+    "Plan an Indian wedding by voice, in English, Hindi or Hinglish: events, guests, vendors and money in one family account book.",
+};
+
+/** The public landing page. The app entry redirect lives at `/app` (routes.home()). */
+export default function Home() {
+  return <LandingPage />;
 }
