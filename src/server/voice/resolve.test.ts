@@ -499,3 +499,58 @@ describe("heard words found by code (3.1 step 1)", () => {
     expect(out.kind === "preview" && out.confirm_enabled).toBeFalsy();
   });
 });
+
+describe("query_changes templates (4.2)", () => {
+  it("O-04: two notes of one topic, each card linked to its function", async () => {
+    const ctx = await ctxFor(tool([{ kind: "query_changes", actor_member_id: "MEM-DIYA", day: "today" }], "ask"), "What did Diya add today?", { register: "en" });
+    const out = await resolveTurn(ctx);
+    expect(out.kind).toBe("answer");
+    if (out.kind !== "answer") return;
+    expect(out.reply.display_text).toBe(
+      "Today Diya added two notes: sugar-free dessert option at the reception, and marigold and fairy-light canopy over the stage at the sangeet.",
+    );
+    expect(out.cards).toHaveLength(2);
+    for (const card of out.cards) expect(card.link).toContain("highlight=requirements");
+  });
+
+  it("O-04 in hinglish keeps Latin display and Devanagari speech", async () => {
+    const ctx = await ctxFor(tool([{ kind: "query_changes", actor_member_id: "MEM-DIYA", day: "today" }], "ask"), "Diya ne aaj kya joda?");
+    const out = await resolveTurn(ctx);
+    if (out.kind !== "answer") throw new Error(out.kind);
+    expect(out.reply.display_text).toBe(
+      "Aaj Diya ne do notes jode: reception mein sugar-free dessert option, aur sangeet mein marigold and fairy-light canopy over the stage.",
+    );
+    expect(out.reply.speech_text).toContain("आज Diya ने दो notes जोड़े");
+  });
+
+  it("M-10: three or more says the count in words, today, and where the top change stands", async () => {
+    const services = servicesWith((name, value) => {
+      if (name !== "activity_feed") return value;
+      const feed = value as ActivityFeed;
+      const template = feed.entries[0]!;
+      const entry = (seq: number, actor: string, patch: Partial<typeof template>) => ({ ...template, seq, actor_label: actor, seed_key: `ACT-0${seq}`, ...patch });
+      feed.entries = [
+        entry(8, "Mira", { topic: "itinerary.published", entity_type: "itinerary" as never, summary_en: "Mira published revision 3." }),
+        entry(7, "Diya", { topic: "requirement.added", entity_type: "requirement", summary_en: "Diya added a note." }),
+        entry(6, "Mira", { topic: "payment.recorded", entity_type: "payment" as never, summary_en: "Mira recorded a payment." }),
+        entry(5, "Diya", { topic: "commitment.updated", entity_type: "commitment" as never, summary_en: "Diya changed an amount." }),
+        entry(4, "Diya", {
+          topic: "event.updated",
+          entity_type: "event",
+          entity_id: ids.reception_event_id,
+          summary_en: "Diya moved the reception from Banyan Hall to Lotus Hall.",
+          before: { venue_name: "Banyan Hall" },
+          after: { venue_name: "Lotus Hall" },
+          awaiting_publish: false,
+        }),
+      ];
+      return feed;
+    });
+    const ctx = await ctxFor(tool([{ kind: "query_changes", day: "today" }], "ask"), "What changed today?", { register: "en", services });
+    const out = await resolveTurn(ctx, { services });
+    if (out.kind !== "answer") throw new Error(out.kind);
+    expect(out.reply.display_text).toBe("Diya made three changes today, including moving the reception to Lotus Hall, which is now published.");
+    expect(out.cards).toHaveLength(5);
+    expect(out.cards.filter((card) => card.title.startsWith("Your changes today"))).toHaveLength(2);
+  });
+});

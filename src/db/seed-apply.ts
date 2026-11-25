@@ -496,3 +496,42 @@ export async function upsertCouplePhotoAsset(
   const version = await bumpVersion(tx, dataset.wedding_id);
   return { asset_id, storage_path, version };
 }
+
+/**
+ * The photo step's extra photos (ASSET-PHOTO-2 to -6): upserts each given `couple_photo` row by its
+ * fixed id with the uploaded file's fields. The invite style is not touched, so the card keeps
+ * ASSET-PHOTO until someone switches it. One `version` bump for the lot, so open screens refresh.
+ */
+export async function upsertExtraPhotoAssets(
+  tx: Tx,
+  dataset: SeedDataset,
+  files: Array<{ seed_key: string; bytes: number; mime_type: string; width?: number; height?: number }>,
+): Promise<{ assets: Array<{ asset_id: string; seed_key: string; storage_path: string }>; version: number | null }> {
+  if (files.length === 0) return { assets: [], version: null };
+  if (!(await lockWedding(tx, dataset.wedding_id))) {
+    throw new Error(`Copy ${dataset.copy} is not seeded yet: run the seed before the photo step`);
+  }
+  const now = new Date();
+  const written: Array<{ asset_id: string; seed_key: string; storage_path: string }> = [];
+  for (const file of files) {
+    const photo = dataset.extra_photos.find((candidate) => candidate.seed_key === file.seed_key);
+    if (!photo) throw new Error(`${file.seed_key} is not one of the extra photos`);
+    const fileFields = {
+      asset_kind: "couple_photo" as const,
+      storage_path: photo.storage_path,
+      mime_type: file.mime_type,
+      bytes: file.bytes,
+      width: file.width ?? null,
+      height: file.height ?? null,
+      seed_key: photo.seed_key,
+      updated_at: now,
+    };
+    await tx
+      .insert(assets)
+      .values({ id: photo.asset_id, wedding_id: dataset.wedding_id, uploaded_by_member_id: ownerMemberId(dataset), ...fileFields })
+      .onConflictDoUpdate({ target: assets.id, set: fileFields });
+    written.push({ asset_id: photo.asset_id, seed_key: photo.seed_key, storage_path: photo.storage_path });
+  }
+  const version = await bumpVersion(tx, dataset.wedding_id);
+  return { assets: written, version };
+}
