@@ -5,8 +5,7 @@ import { useEffect, useRef } from "react";
 
 import { VENDOR_ID_PARAM } from "@/contracts/routes";
 
-/** The id of the shell's `<main>`, which the skip link also targets. */
-export const MAIN_ID = "main";
+import { MAIN_ID } from "./main-id";
 
 /** The query parameters that open a record on a section's own path (D18): a vendor, a function. */
 const RECORD_PARAMS = [VENDOR_ID_PARAM, "event_id"] as const;
