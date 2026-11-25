@@ -1,3 +1,5 @@
+> **Superseded draft (decision D38).** This is the 01:20 strategy draft, kept for its reasoning. Wherever it conflicts with `scope.md`, the specs in `spec/`, `demo-data.md` or `demo-script.md`, those files win. For example, the reception's original hall is Banyan Hall, not Garden Hall (Garden Hall is the sangeet venue), and spoken replies use Bulbul `bulbul:v4-flash` (voice.md 1.14), not Bulbul v3. The rest of this file is left as written at 01:20.
+
 ## 1. Winning thesis
 
 Open **Jashn** (working title) with a question any wedding family recognises. “Caterer ko ab kitna dena hai?” A parent corrects an advance in Hinglish. A guest accepts on another phone. The family sees exactly why the meal estimate moved and what it owes. Give Kunal Kushwaha of WeMakeDevs a repo another builder can run, Hitesh Choudhary of Chai aur Code a spoken correction he can follow down to the payment, and Saiyam Pathak of Kubesimplify an actual failed export recovered under approval. Berlin requires all three sponsors, second place rewards Flagsmith, and the organisers publish no judging weights. [Event and judges](https://www.wemakedevs.org/hackathons/festivehacks)
