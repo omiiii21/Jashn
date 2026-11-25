@@ -428,7 +428,7 @@ describe("references read from the transcript (2.5, V5)", () => {
 });
 
 describe("fixed replies", () => {
-  const KEYS: FixedReplyKey[] = ["already_saved", "nothing_to_confirm", "cancelled", "nothing_to_cancel", "voice_writes_paused", "replaced", "publish_alone", "cant_by_voice", "too_many_actions", "request_closed", "expired", "no_speech", "stt_failed", "llm_failed", "too_long"];
+  const KEYS: FixedReplyKey[] = ["already_saved", "nothing_to_confirm", "cancelled", "nothing_to_cancel", "voice_writes_paused", "replaced", "publish_alone", "cant_by_voice", "no_context", "no_context_rest", "too_many_actions", "request_closed", "expired", "no_speech", "stt_failed", "llm_failed", "too_long"];
   it("has every key in every register", () => {
     for (const key of KEYS) for (const r of ["en", "hinglish", "hi"] as const) expect(fixedReply(key, r).display_text.length, `${key} ${r}`).toBeGreaterThan(0);
   });
@@ -436,6 +436,58 @@ describe("fixed replies", () => {
     expect(fixedReply("cancelled", "hi").display_text).toBe("ठीक है, कुछ नहीं बदला।");
     expect(fixedReply("cancelled", "hinglish").display_text).toBe("ठीक है, कुछ नहीं बदला।");
     expect(fixedReply("cancelled", "en").display_text).toBe("OK, nothing was changed.");
+  });
+});
+
+describe("questions the plan doesn't answer", () => {
+  const withReply = (args: ToolArguments, text: string): ToolArguments => ({ ...args, reply: text });
+
+  it("an out-of-plan question gets the fixed line, never the model's guess", async () => {
+    const args = withReply(tool([], "ask", ["context"]), "Parking is behind the main gate");
+    const out = await resolveTurn(await ctxFor(args, "Venue पर parking कितनी गाड़ियों की है?"));
+    expect(out.kind).toBe("clarify");
+    if (out.kind !== "clarify") return;
+    expect(out.question).toEqual(fixedReply("no_context", "hinglish"));
+    expect(out.question.display_text).not.toContain("gate");
+    expect(out.actions).toEqual([]);
+  });
+
+  it("an ask with no matching kind is the same line, in English too", async () => {
+    const args = withReply(tool([], "ask"), "It will be sunny that day.");
+    const out = await resolveTurn(await ctxFor(args, "What will the weather be on the wedding day?", { register: "en" }));
+    if (out.kind !== "clarify") throw new Error("expected a question back");
+    expect(out.question.display_text).toBe("I don't have that in your plan yet, so I won't guess.");
+  });
+
+  it("a question the model calls clarify, with nothing missing, is still not guessed", async () => {
+    const out = await resolveTurn(await ctxFor(tool([], "clarify"), "Where will the guests park?", { register: "en" }));
+    if (out.kind !== "clarify") throw new Error("expected a question back");
+    expect(out.question).toEqual(fixedReply("no_context", "en"));
+  });
+
+  it("a request phrased as a question stays 'can't do that by voice'", async () => {
+    const out = await resolveTurn(await ctxFor(tool([], "clarify"), "Can you send the invite to Tara on WhatsApp?", { register: "en" }));
+    if (out.kind !== "clarify") throw new Error("expected a question back");
+    expect(out.question).toEqual(fixedReply("cant_by_voice", "en"));
+  });
+
+  it("a question half in the plan answers that half and says the rest isn't there", async () => {
+    const args = tool([{ kind: "query_event", event_id: "EVT-SAN", detail: "time" }], "ask", ["context"]);
+    const out = await resolveTurn(await ctxFor(args, "Sangeet kab hai, aur ghodi kaun la raha hai?"));
+    if (out.kind !== "answer") throw new Error("expected an answer");
+    expect(out.reply.display_text.endsWith(fixedReply("no_context_rest", "hinglish").display_text)).toBe(true);
+    expect(out.cards.length).toBeGreaterThan(0);
+  });
+
+  it("the model's words are kept only as a question back about a missing field", async () => {
+    const asked = await resolveTurn(await ctxFor(withReply(tool([], "act", ["vendor_id"]), "Kis vendor ki baat hai?"), "Advance de diya"));
+    if (asked.kind !== "clarify") throw new Error("expected a question back");
+    expect(asked.question.display_text).toBe("Kis vendor ki baat hai?");
+    expect(asked.missing_fields).toEqual(["vendor_id"]);
+
+    const stated = await resolveTurn(await ctxFor(withReply(tool([], "act", ["vendor_id"]), "DJ ka advance ho gaya."), "Advance de diya"));
+    if (stated.kind !== "clarify") throw new Error("expected a question back");
+    expect(stated.question.display_text).not.toContain("DJ");
   });
 });
 

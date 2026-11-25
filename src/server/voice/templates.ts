@@ -19,6 +19,8 @@ export type FixedReplyKey =
   | "replaced"
   | "publish_alone"
   | "cant_by_voice"
+  | "no_context"
+  | "no_context_rest"
   | "too_many_actions"
   | "request_closed"
   | "expired"
@@ -82,6 +84,21 @@ const FIXED: Record<FixedReplyKey, Forms> = {
       speech: "यह अभी voice से नहीं हो सकता। उसके page पर कर सकते हैं।",
     },
     hi: same("यह अभी वॉइस से नहीं हो सकता। उसके पेज पर कर सकते हैं।"),
+  },
+  // A question nothing saved in the plan answers: say so, never a guess from nearby data.
+  no_context: {
+    en: same("I don't have that in your plan yet, so I won't guess."),
+    hinglish: {
+      display: "Iski jaankari abhi aapke plan mein nahi hai, toh andaaza nahi lagaya.",
+      speech: "इसकी जानकारी अभी आपके plan में नहीं है, तो अंदाज़ा नहीं लगाया।",
+    },
+    hi: same("इसकी जानकारी अभी आपके प्लान में नहीं है, तो अंदाज़ा नहीं लगाया।"),
+  },
+  // After an answer to the part of a question the plan holds.
+  no_context_rest: {
+    en: same("The rest isn't in your plan yet, so I won't guess."),
+    hinglish: { display: "Baaki ki jaankari abhi plan mein nahi hai.", speech: "बाकी की जानकारी अभी plan में नहीं है।" },
+    hi: same("बाकी की जानकारी अभी प्लान में नहीं है।"),
   },
   too_many_actions: {
     en: same("One or two things at a time, please."),

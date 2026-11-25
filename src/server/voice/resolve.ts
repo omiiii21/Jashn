@@ -91,6 +91,43 @@ export function passesReplyGuard(text: string, register: ReplyRegister): boolean
 
 const UNSUPPORTED_WORDS = /\b(void|delete|remove|budget line|invite (a )?member|sharing|share with|reset|approve|reject|withdraw|invitation link|thank(ed)? (them|her|him))\b/i;
 
+/** A question by its words: a question mark, or a question word in English, Hinglish or Hindi. */
+const QUESTION_WORDS =
+  /[?？]|\b(what|when|where|who|whom|whose|which|why|how|is there|are there|do we|does|did)\b|\b(kya|kab|kahan|kahaan|kaun|kaunsa|kaunsi|kitna|kitne|kitni|kaisa|kaise|kaisi|kyun|kyon)\b|(क्या|कब|कहाँ|कहां|कौन|कितना|कितने|कितनी|कैसा|कैसे|कैसी|क्यों)/i;
+
+/** A request phrased as a question ("can you send...", "kar doge?") is a request, not a question. */
+const REQUEST_WORDS =
+  /\b(can you|could you|will you|would you|please|send|call|message|whatsapp|remind)\b|\b(kar (do|doge|dogi|dijiye|dena|sakte|sakti)|bhej)|(कर (दो|दोगे|दीजिए|देना|सकते|सकती)|भेज)/i;
+
+/** The model's own words are shown only as a question back about a missing field, never as an answer. */
+function isQuestionBack(text: string): boolean {
+  return /[?？]\s*$/.test(text.trim());
+}
+
+/**
+ * Nothing proposed (1.11 step 1). No answer is ever built from the model's own text: answers
+ * come only from saved records through an ask kind. A question no ask kind covers gets the
+ * fixed "not in your plan yet" line instead of a guess from nearby data.
+ */
+function nothingProposed(ctx: ResolveContext): ResolveOutcome {
+  const r = ctx.register;
+  const { intent, missing_fields } = ctx.tool;
+  const clarify = (question: ReplyText, missing: string[] = []): ResolveOutcome => ({ kind: "clarify", question, missing_fields: missing, actions: [] });
+  if (UNSUPPORTED_WORDS.test(ctx.transcript)) return clarify(fixedReply("cant_by_voice", r));
+  const asksForContext = missing_fields.includes("context");
+  const unanswered =
+    asksForContext ||
+    intent === "ask" ||
+    (intent === "clarify" && missing_fields.length === 0 && QUESTION_WORDS.test(ctx.transcript) && !REQUEST_WORDS.test(ctx.transcript));
+  if (unanswered) return clarify(fixedReply("no_context", r));
+  const fields = missing_fields.filter((field) => field !== "context");
+  if (fields.length > 0 && isQuestionBack(ctx.tool.reply) && passesReplyGuard(ctx.tool.reply, r)) {
+    return clarify(reply(r, ctx.tool.reply.trim()), fields);
+  }
+  if (intent === "clarify" && fields.length === 0) return clarify(fixedReply("cant_by_voice", r));
+  return clarify(genericQuestion(r), fields);
+}
+
 type Refusal = { index: number; code: "forbidden" | "not_shared"; what: "publish" | "guest" | "details" | "vendor_money" | "budget" | "total" | "shagun" };
 
 function refusalReply(refusals: Refusal[], register: ReplyRegister, owners: string): ReplyText {
@@ -123,11 +160,7 @@ export async function resolveTurn(input: ResolveContext, overrides: ResolveOverr
   if (actions.length > 4) {
     return { kind: "clarify", question: fixedReply("too_many_actions", r), missing_fields: [], actions: [] };
   }
-  if (actions.length === 0) {
-    if (UNSUPPORTED_WORDS.test(ctx.transcript)) return { kind: "clarify", question: fixedReply("cant_by_voice", r), missing_fields: [], actions: [] };
-    const modelReply = passesReplyGuard(ctx.tool.reply, r) ? reply(r, ctx.tool.reply.trim()) : null;
-    return { kind: "clarify", question: modelReply ?? (ctx.tool.intent === "clarify" && ctx.tool.missing_fields.length === 0 ? fixedReply("cant_by_voice", r) : genericQuestion(r)), missing_fields: ctx.tool.missing_fields, actions: [] };
-  }
+  if (actions.length === 0) return nothingProposed(ctx);
 
   const profile = ctx.wedding_id ? await access.profile() : null;
   const owners = profile ? `${profile.bride_name} or ${profile.groom_name}` : "an owner";
@@ -264,6 +297,8 @@ export async function resolveTurn(input: ResolveContext, overrides: ResolveOverr
       replyText = joinReplies(r, replies.slice(0, 2).map(firstSentenceOf));
       if (replies.length > 2) replyText = { ...replyText, display_text: `${replyText.display_text} ${r === "en" ? "Ask me the rest one at a time." : "Baaki ek-ek karke poochiye."}` };
     }
+    // Part of the question isn't in the plan: answer what is, and say the rest isn't (no guess).
+    if (replies.length > 0 && ctx.tool.missing_fields.includes("context")) replyText = joinReplies(r, [replyText, fixedReply("no_context_rest", r)]);
     return { kind: "answer", cards: answerCards, reply: withoutRepeatedSentences(replyText) };
   }
 
