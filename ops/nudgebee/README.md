@@ -181,10 +181,10 @@ After the recovery: `status` "succeeded", `retryable` "false", `attempts` "2", `
 
 ## 6. The drill
 
-**How it arms (4.1).** Only the Flagsmith Production flag `export_failure_drill` arms it, read once when `request_card_export` creates a job:
-- **Armed:** enabled, with the value equal to the id of a wedding that has `is_sample`. The new job gets `fail_injection` `once` and `synthetic` true.
-- **Not armed:** disabled (the default); enabled with an empty value, or with the id of a wedding that isn't a sample (the server logs "drill ignored"); Flagsmith unreachable (falls back to off).
-- **Env override:** `EXPORT_FAILURE_DRILL` holds a wedding id and is unset by default. It is the only override, needs a redeploy, and is used only when Flagsmith is down.
+**How it arms (4.1; flagsmith 3.6).** The Flagsmith Production flag `export_failure_drill` is read once, when `request_card_export` creates a job:
+- **Armed:** enabled, with the value equal to the new job's wedding id, on a wedding that has `is_sample`. The new job gets `fail_injection` `once` and `synthetic` true.
+- **Not armed:** disabled (the default); enabled with an empty value, or with the id of a wedding that isn't a sample (the server logs "drill ignored").
+- **When Flagsmith can't be read** (no key yet, or unreachable), the drill is off, unless `EXPORT_FAILURE_DRILL` holds a wedding id: that value then stands in for the flag's value, under the same rule. It is unset by default and is the only override. Setting or clearing it needs a production redeploy. Whenever Flagsmith answers, the env var is ignored.
 - Only new jobs on the named wedding. Nothing else can arm it: no request field, header, voice phrase or ops call.
 - It fails attempt 1 before any browser starts, and is consumed in the claim write, so the retry renders normally.
 - Practice runs use Lane D's rehearsal copy `d`. The demo copy is armed only for the recorded take (V15).
@@ -192,9 +192,9 @@ After the recovery: `status` "succeeded", `retryable` "false", `attempts` "2", `
 **Expected sequence (NB-T10 on copy `d`):**
 1. Lane D resets copy `d` to D0 (`reset_demo`, checkpoint d0). As Diya, move the reception to Lotus Hall; as Mira, publish revision 3.
 2. Warm the renderer up 5 minutes before (3.4).
-3. After the lead says go, the user arms the drill with copy `d`'s wedding id.
+3. After the lead says go, the drill is armed with copy `d`'s wedding id: in Flagsmith, the user sets the value, then enables the flag; without Flagsmith, the lead sets `EXPORT_FAILURE_DRILL` in Vercel Production and redeploys.
 4. Mira clicks Export card. Attempt 1 fails with `DRILL_INJECTED` ("Injected fault (deliberate): renderer timeout", `synthetic` "true"). The panel shows Failed with the "Deliberate drill" chip and "Sent to NudgeBee for recovery."
-5. The user disarms the drill at once: disable the flag and clear its value.
+5. Disarm the drill at once. In Flagsmith, the user disables the flag and clears its value. If `EXPORT_FAILURE_DRILL` armed it, the lead removes the variable and redeploys; until then every new card export on copy `d` fails its first attempt.
 6. The webhook starts `card-export-recovery` within 10 s. `resolve_job` and `read_status` go green, and `approve_retry` waits.
 7. The approver approves (comment "Re-render the card only").
 8. `retry_export` answers `retried` with `attempt` "2"; `verify` answers 200 with `succeeded`; `replay_check` answers `replayed` "true"; `verdict` prints.
@@ -206,7 +206,7 @@ After the recovery: `status` "succeeded", `retryable` "false", `attempts` "2", `
   2. "The card export for revision 3 failed: renderer timeout (deliberate drill)."
   3. "NudgeBee retried the card export for revision 3 (run {run}, approved by {approver})."
   4. "The card for revision 3 is ready."
-- **One stored object,** `card-rev3.png` in the job's folder of the private `exports` bucket, on a job with 2 attempts.
+- **One stored object,** `<wedding id>/card-rev3.png` in the private `exports` bucket (2.6), on a job with 2 attempts.
 - No publish and no change to the guest page, RSVPs or the ledger.
 
 **Record:** the run id (the first 8 characters of the execution id is enough) and the IST time go in the run log below, in a follow-up PR (D62). Keep the first successful run id (D43). Take three screenshots for the fallback: failed, awaiting approval, completed. NudgeBee's retention is unknown.
