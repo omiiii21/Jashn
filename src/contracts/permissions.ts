@@ -140,6 +140,8 @@ export const READ_MODEL_PERMISSIONS: Record<ReadModelName, { owner: boolean; man
   catering_estimate: { owner: true, manager: "if_vendor_dues", guest: false },
   proposals: { owner: true, manager: "own_only", guest: false },
   shagun_register: { owner: true, manager: "forbidden", guest: false },
+  // 4.11: the member list, pending invites and sharing flags are for owners only.
+  team: { owner: true, manager: "forbidden", guest: false },
 };
 
 /**

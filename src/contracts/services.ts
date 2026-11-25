@@ -89,6 +89,7 @@ import type {
   RsvpTotals,
   RsvpTotalsRow,
   ShagunRegister,
+  TeamView,
   UnpublishedChange,
   VendorLedger,
   WeddingProfile,
@@ -996,6 +997,27 @@ function buildWeddingProfile(fixture: DemoFixture, reader: Reader, actor: Sessio
   return profile;
 }
 
+/** 4.11 `team` from the fixture: active members, owners first; the fixture has no invites. */
+function buildTeam(fixture: DemoFixture, reader: Reader): TeamView {
+  const active = fixture.members.filter((row) => row.removed_at === null);
+  const ordered = [...active.filter((row) => row.role === "owner"), ...active.filter((row) => row.role !== "owner")];
+  return {
+    version: fixture.wedding.version,
+    hidden: [],
+    wedding_id: fixture.wedding.wedding_id,
+    members: ordered.map((row) => ({
+      member_id: row.member_id,
+      seed_key: row.seed_key,
+      display_name: row.display_name,
+      role: row.role,
+      joined_at: fixture.now,
+      is_you: row.member_id === reader.member_id,
+    })),
+    pending_invites: [],
+    sharing: sharingOf(fixture),
+  };
+}
+
 function buildOverview(fixture: DemoFixture, reader: Reader): Overview {
   const events = sortedEvents(fixture);
   const hidden: HiddenBlock[] = [];
@@ -1063,6 +1085,8 @@ function readModel(name: ReadModelName, fixture: DemoFixture, actor: SessionActo
   switch (name) {
     case "wedding_profile":
       return buildWeddingProfile(fixture, reader, actor);
+    case "team":
+      return buildTeam(fixture, reader);
     case "overview":
       return buildOverview(fixture, reader);
     case "money_summary":
