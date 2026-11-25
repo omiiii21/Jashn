@@ -140,7 +140,31 @@ export function silent(register: ReplyRegister, display: string): ReplyText {
 export function joinReplies(register: ReplyRegister, parts: ReplyText[]): ReplyText {
   const display = parts.map((part) => part.display_text).join(" ");
   const speechParts = parts.map((part) => part.speech_text ?? part.display_text);
-  return { display_text: display, speech_text: speechParts.join(" "), language: register };
+  return withoutRepeatedSentences({ display_text: display, speech_text: speechParts.join(" "), language: register });
+}
+
+/**
+ * Drops a sentence that repeats an earlier one word for word ("… बाकी हैं। … बाकी हैं।").
+ * A text with no repeat comes back unchanged.
+ */
+export function withoutRepeatedSentences(value: ReplyText): ReplyText {
+  const dedupe = (text: string): string => {
+    const sentences = text.split(/(?<=[.?!।])\s+/u);
+    const seen = new Set<string>();
+    const kept: string[] = [];
+    for (const sentence of sentences) {
+      const key = sentence.replace(/\s+/g, " ").trim();
+      if (key.length > 0 && seen.has(key)) continue;
+      seen.add(key);
+      kept.push(sentence);
+    }
+    return kept.length === sentences.length ? text : kept.join(" ");
+  };
+  return {
+    display_text: dedupe(value.display_text),
+    speech_text: value.speech_text === null ? null : dedupe(value.speech_text),
+    language: value.language,
+  };
 }
 
 /** The first sentence of a text (ending in ".", "?", "!" or "।"). */
