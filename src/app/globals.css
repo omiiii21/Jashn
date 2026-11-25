@@ -132,7 +132,7 @@
 }
 /* ==========================================================================
    Jashn token layer for src/app/globals.css (decision D4)
-   Status: Proposed. Source: DESIGN.md and docs/prep/design-direction.md
+   Status: Approved by Lane E (D132), 13:20. Source: DESIGN.md, the Doop canvas and design-direction.md
    sections 4, 5, 7 and 11. Light theme only (design-direction 4.3).
 
    How to merge, after `shadcn init` has written its own blocks:
@@ -184,15 +184,15 @@
   --jashn-gold-ink: #7d5b17; /* gold as text on light grounds */
 
   /* Status: always with an icon and a word */
-  --jashn-paid: #2f6a3b;
-  --jashn-paid-tint: #e3eedf;
-  --jashn-due: #8a5300;
-  --jashn-due-tint: #fbebc4;
-  --jashn-overdue: #b3261e;
-  --jashn-overdue-tint: #fadbd6;
-  --jashn-proposal: #1d5468;
-  --jashn-proposal-tint: #ddebef;
-  --jashn-wash: #f6e4b4; /* "just changed" highlight */
+  --jashn-paid: #3f5b44; /* Quiet palette (Lane E, 13:20): 6.17 on its tint */
+  --jashn-paid-tint: #efe8d9; /* one warm neutral chip ground for paid, due and proposal */
+  --jashn-due: #7d5b17; /* gold-ink: 5.09 on its tint */
+  --jashn-due-tint: #efe8d9;
+  --jashn-overdue: #a3301f; /* 5.66 on its tint, 6.83 on paper */
+  --jashn-overdue-tint: #f4e4dd;
+  --jashn-proposal: #46525a; /* 6.58 on its tint */
+  --jashn-proposal-tint: #efe8d9;
+  --jashn-wash: #f3e9cc; /* "just changed" highlight; ink 13.41, ink-3 5.16 */
 
   /* Alternative invitation theme (invitation only, if time allows) */
   --jashn-peacock: #14505e;
@@ -300,7 +300,8 @@
   /* Fonts. next/font sets --font-display, --font-body and --font-hindi on
      <html>. The theme keys use other names so nothing references itself.
      font-sans (Anek Devanagari) is also the page default. */
-  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-ui), var(--font-body), ui-sans-serif, system-ui, sans-serif; /* Geist, then Anek for Devanagari */
+  --font-title: var(--font-geist-serif), var(--font-display), ui-serif, Georgia, serif; /* Geist Serif: planner h1 and rail name only (Lane E) */
   --font-serif: var(--font-display), ui-serif, Georgia, serif; /* Eczar: names and titles only */
   --font-classic: var(--font-hindi), var(--font-display), ui-serif, serif; /* Tiro, studio only */
 
