@@ -40,7 +40,8 @@ export function StudioPreview({ model, label }: StudioPreviewProps) {
     >
       <div
         className={`absolute top-0 left-0 origin-top-left${scale === null ? " invisible" : ""}`}
-        style={{ width: CARD_WIDTH_PX, height: CARD_HEIGHT_PX, transform: `scale(${scale ?? 1})` }}
+        // Inline origin: the scale must pin the card's corner whatever the stylesheet holds.
+        style={{ width: CARD_WIDTH_PX, height: CARD_HEIGHT_PX, transform: `scale(${scale ?? 1})`, transformOrigin: "0 0" }}
       >
         <InvitationCard model={model} />
       </div>
