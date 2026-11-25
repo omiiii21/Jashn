@@ -786,6 +786,28 @@ export const requirements = app
   )
   .enableRLS();
 
+/** Facts the planner told the assistant that no other record holds (add_note, voice.md 2.3). */
+export const weddingNotes = app
+  .table(
+    "wedding_notes",
+    {
+      id: idColumn(),
+      wedding_id: weddingRef(),
+      topic: text("topic").notNull(),
+      note_text: text("note_text").notNull(),
+      created_by_member_id: uuid("created_by_member_id"),
+      deleted_at: tstz("deleted_at"),
+      created_at: createdAt(),
+      updated_at: updatedAt(),
+      seed_key: seedKey(),
+    },
+    (t) => [
+      index("wedding_notes_wedding_created_idx").on(t.wedding_id, t.created_at),
+      uniqueIndex("wedding_notes_seed_key_uq").on(t.wedding_id, t.seed_key).where(sql`${t.seed_key} is not null`),
+    ],
+  )
+  .enableRLS();
+
 export const shagunEntries = app
   .table(
     "shagun_entries",
@@ -1136,6 +1158,7 @@ export const ALL_TABLES = {
   payments,
   paymentVersions,
   requirements,
+  weddingNotes,
   shagunEntries,
   proposals,
   activityEntries,
