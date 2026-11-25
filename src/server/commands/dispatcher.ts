@@ -110,7 +110,7 @@ const defaultLog: DispatcherDeps["log"] = (message, detail) => {
 type Failure = { ok: false; error: CommandErrorBody };
 
 function fail(error: CommandErrorBody): Failure {
-  return { ok: false, error: { field: null, ...error } };
+  return { ok: false, error: { ...error, field: error.field ?? null } };
 }
 
 const VOICE_PAUSED_MESSAGE = "Voice changes are paused right now. You can type it and save.";
