@@ -329,11 +329,54 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
     }
     case "set_rsvp": {
       const path = wedding_id ? routes.guests(wedding_id, typeof input.event_id === "string" ? input.event_id : undefined) : null;
+      const rsvp = rsvpReply(facts, typeof input.rsvp_status === "string" ? input.rsvp_status : facts.rsvp_status ?? null, r);
+      if (rsvp) return { reply: rsvp, navigate_path: path };
       return { reply: reply(r, r === "en" ? "Saved the RSVP." : "RSVP save ho gaya.", r === "en" ? undefined : "RSVP save हो गया।"), navigate_path: path };
     }
     default:
       return { reply: reply(r, r === "en" ? "Saved." : r === "hinglish" ? "Save ho gaya." : "सेव हो गया।", r === "hinglish" ? "Save हो गया।" : undefined), navigate_path: wedding_id ? routes.wedding(wedding_id) : null };
   }
+}
+
+function nameList(names: string[], and: string): string {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} ${and} ${names[names.length - 1]}`;
+}
+
+/**
+ * G-02 (4.10): the guests by their first names as stored, the function, and its attending
+ * count after saving. "Nikhil aur Prachi reception ke liye confirm ho gaye. Ab 231 log aa
+ * rahe hain." Null when the preview had no names, so the generic line stands.
+ */
+function rsvpReply(facts: ReturnType<typeof factsOf>, status: string | null, r: ReplyRegister): ReplyText | null {
+  const names = (facts.guest_names ?? []).map((name) => name.trim().split(/\s+/)[0] ?? name).filter(Boolean);
+  if (names.length === 0 || !facts.event_title || !status) return null;
+  const t = facts.event_title.toLowerCase();
+  const tHi = facts.event_title_hi ?? facts.event_title;
+  const n = facts.attending_after;
+  const one = names.length === 1;
+  if (r === "en") {
+    const who = nameList(names, "and");
+    const first =
+      status === "attending"
+        ? `${who} ${one ? "is" : "are"} confirmed for the ${t}.`
+        : status === "declined"
+          ? `${who} can't come to the ${t}.`
+          : `${who} ${one ? "is" : "are"} marked not replied for the ${t}.`;
+    return reply(r, `${first}${n !== undefined ? ` ${n} ${n === 1 ? "is" : "are"} now coming.` : ""}`);
+  }
+  const countLine = n !== undefined ? { display: ` Ab ${n} log aa rahe hain.`, speech: ` अब ${countHi(n)} लोग आ रहे हैं।` } : { display: "", speech: "" };
+  if (r === "hinglish") {
+    const verb =
+      status === "attending"
+        ? { display: `${t} ke liye confirm ho gaye.`, speech: `${t} के लिए confirm हो गए।` }
+        : status === "declined"
+          ? { display: `${t} mein nahi aa paayenge.`, speech: `${t} में नहीं आ पाएँगे।` }
+          : { display: `${t} ke liye abhi jawab nahi aaya.`, speech: `${t} के लिए अभी जवाब नहीं आया।` };
+    return reply(r, `${nameList(names, "aur")} ${verb.display}${countLine.display}`, `${nameList(names, "और")} ${verb.speech}${countLine.speech}`);
+  }
+  const verbHi = status === "attending" ? `${tHi} के लिए कन्फ़र्म हो गए।` : status === "declined" ? `${tHi} में नहीं आ पाएँगे।` : `${tHi} के लिए अभी जवाब नहीं आया।`;
+  return reply(r, `${nameList(names, "और")} ${verbHi}${countLine.speech}`);
 }
 
 const WEEKDAY_LONG: Record<string, string> = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
