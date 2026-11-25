@@ -7,6 +7,7 @@ import { inviteHandlers } from "@/server/invite/handlers";
 
 import { demoHandlers } from "./demo";
 import { eventHandlers } from "./events";
+import { guestHandlers } from "./guests";
 import { ledgerHandlers } from "./ledger";
 import { proposalHandlers } from "./proposals";
 import { weddingProfileHandlers } from "./wedding-profile";
@@ -29,6 +30,7 @@ const LANE_A_MAPS: HandlerMap[] = [
   demoHandlers,
   ledgerHandlers,
   proposalHandlers,
+  guestHandlers,
   // memberHandlers (A6),
 ];
 
