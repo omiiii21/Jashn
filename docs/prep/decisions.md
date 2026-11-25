@@ -447,3 +447,67 @@ Every decision below is binding. Brackets name the finding: simAB and simCD are 
   - The synthetic run's go-ahead: the user tells L once F1 is launched, and L tells Lane C (build-kickoff step 22, flagsmith 7.3 and 7.4).
   - The public repo never names the user's other GitHub account. Notes say "another gh account is active" instead.
   - Notes that cite "D1–D122" now say "D1–D130".
+
+## Round 6, 12:35 IST: the late start, and a fifth lane
+
+The laptop was offline from about 07:15 to 11:30, so the kickoff ran at 11:32 instead of 09:03. Where any note gives a clock time, these decisions win.
+
+- **D131. The compressed day.**
+  - **Kickoff:** notes merged at 12:04 and the scaffold at 12:21. The contracts merge at about 12:55; the worktrees are ready and the four sessions start at about 13:05. The design round is skipped: `DESIGN.md` as written is the direction, and Lane E approves or adjusts it by 13:45 (D132). Until then, lanes build on "Proposed" (D86).
+  - **Scope:** Must 1–9 only. Should 10–13 are future scope. A lane that is ahead may take #10 (overview) or #12 (requirements, light), but only after L confirms that lane's Musts on production. #11 (the card reader) and #13 (shagun) are out. This is the default the user was offered; the user may still override it.
+  - **Batches.** Merge order stays A → B → C → D, then E.
+
+    | Old | New | Takes |
+    |---|---|---|
+    | 10:45 | **14:00** | The first branches, with the same content as the old 10:45 batch: A's must-list (D102), B's shell and vendor page on fixtures, C's flags core and VoiceDock, D's render probe |
+    | 11:40 and 12:30 | **14:45** | Both old batches in one: A's access items, `update_event`, the guest view and RSVP; B's Guests, Events and money correction; C's setup and the voice integrations; D's publish, export jobs, guest page and routes, and the minimum Guests and Invite studio (D105) |
+    | 13:45 | **15:20** | Demo-path fixes first, then Must polish, then the NudgeBee recovery pull request if it missed 14:45 |
+    | 14:30 | none | Dropped; no Should batch |
+    | Freeze at 14:45 | **Freeze at 15:35** | — |
+
+  - **Sponsor steps, old → new:**
+    - Flagsmith dashboard (build-kickoff step 17): 09:38 → 13:10–13:40, with a hard limit of 13:50 (was 10:30).
+    - The user's first kill-switch flip (D47): 11:15 → about 14:15. The full kill-switch proof moves to after the 14:45 deploy.
+    - NudgeBee: the user builds the workflow from 13:30 to 14:40 (was 10:05–11:00). The authenticated read through the tunnel moves to about 14:15, and the read on production to about 14:55. NB-T10 to NB-T15 run 14:55–15:10, the recording path is chosen at 15:10, and V15 is recorded 15:10–15:25 (D124's order).
+    - Smoke test: 14:50–15:00, after the 14:45 deploy (D111). One voice test run of the live 8 lines follows it at about 15:00, with the booked speakers (D49).
+    - Couple photo (D107): L has it generated at about 13:15; the user approves it by 13:45; it ships in a lead pull request in the 14:45 batch, and the seed's photo step runs after that deploy.
+  - **Video and submission:**
+
+    | Time | Step |
+    |---|---|
+    | 14:15 | Capture test |
+    | by 15:25 | Sponsor clips |
+    | 15:30 | Shell ready (Lane E) |
+    | 15:35 | Freeze |
+    | 15:35–15:45 | Freeze smoke test |
+    | 15:45–16:00 | Take 1 |
+    | by 16:05 | Fallback uploaded and checked signed out |
+    | 16:00–16:12 | Edit and export (trigger at 16:12: the raw-take cut or take 1) |
+    | by 16:22 | Final upload checked signed out (trigger at 16:22: submit the fallback) |
+    | 16:22–16:32 | Link check |
+    | 16:35 | Submit (16:45 at the latest) |
+    | 16:35–17:00 | `reset_demo` to D0, restore the flags, charge both devices |
+    | 17:00–17:45 | Judging |
+
+- **D132. Lane E: Sagnik, on his own laptop, for the video, content, presentation and UI layer.**
+  - **Owns from the contracts merge:**
+    - `src/app/globals.css`, `DESIGN.md` and `PRODUCT.md`, moved from Lane B. Lane B keeps the screens.
+    - `src/components/ui/`, `src/lib/fonts.ts` and `src/app/not-found.tsx`, moved from L.
+    - New paths: `src/app/design/` (a preview page that returns 404 in production), `public/brand/`, `docs/presentation/`, `docs/media/` and `video/`.
+  - **The contract:** token names, primitive exports and props, and `fonts.ts`'s exports are stable. Lane E changes values and adds names, and never renames or removes one. B, C and D style only through those names. A lane that needs a new token asks L, who passes the request on through Notion.
+  - **Merging:** L merges Lane E's code pull requests at batch times, last in each batch. Lane E merges docs-only or video-only pull requests itself once CI is green.
+  - **Packages:** Lane E runs no install either; package requests go to L (architecture 4.2 rule 4).
+  - **Video files:** footage and renders never go in git.
+  - **What this replaces:** D50 and skills-toolkit 6 gave the video shell to L; it is Lane E's now. The team lead still drives the app in the takes and does the voice-over. Where the notes say "the teammate", they mean Sagnik.
+  - The brief is `docs/context/lane-e.md`.
+- **D133. Keeping two laptops in step.** L can't message an agent on another laptop, so GitHub and Notion are the channels.
+  - **Lane E:**
+    - pushes at least every 30 minutes and at each milestone, with a draft pull request opened early;
+    - keeps its own section of the Notion Build HQ page current (status, ETA, links) on the same rhythm;
+    - writes its questions under "Questions and requests for the lead".
+  - **L:**
+    - reads Lane E's pull requests and section at every batch, and sooner when one changes;
+    - answers there;
+    - posts what Lane E needs: a batch merged, what is live, and when a clip is ready to record.
+  - Each side edits only its own sections.
+  - Secrets never go to GitHub, Notion or chat. The demo accounts' passphrase is passed in person.

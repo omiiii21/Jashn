@@ -38,3 +38,9 @@ CLAUDE.local.md
 e2e/.auth/
 playwright-report/
 test-results/
+# video footage and renders (decision D132)
+video/footage/
+video/renders/
+*.mp4
+*.mov
+*.webm
