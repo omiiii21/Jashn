@@ -16,6 +16,7 @@ import {
 } from "@/contracts/jobs";
 import type { Services } from "@/contracts/services";
 import { isUuidShaped } from "@/db/ids";
+import { OPS_SYSTEM_ACTOR } from "@/server/authz/system";
 
 import { expireIfDue, type JobDeps, type RetryResult } from "./handlers";
 import { opsError, opsJson, opsNotFound, opsUnauthenticated } from "./ops-http";
@@ -41,7 +42,8 @@ export type OpsDeps<Tx> = JobDeps<Tx> & {
   now: () => Date;
 };
 
-export const NUDGEBEE_ACTOR: CommandActor = { kind: "system", label: "NudgeBee" };
+/** NudgeBee's actor: Lane A's ops system actor. */
+export const NUDGEBEE_ACTOR: CommandActor = OPS_SYSTEM_ACTOR;
 
 const ACTIVE = new Set(["queued", "rendering"]);
 
@@ -116,9 +118,10 @@ function intParam(raw: string | null, range: { min: number; max: number; default
   return value >= range.min && value <= range.max ? value : null;
 }
 
-async function waitWhileActive<Tx>(deps: OpsDeps<Tx>, job: ExportJobRow, wait_s: number): Promise<ExportJobRow> {
+async function waitWhileActive<Tx>(deps: OpsDeps<Tx>, job: ExportJobRow, wait_s: number, started = Date.now()): Promise<ExportJobRow> {
   let current = job;
-  const deadline = Date.now() + wait_s * 1000;
+  // Counted from the request's start, so the answer stays inside NudgeBee's 30 s step timeout.
+  const deadline = started + wait_s * 1000;
   while (ACTIVE.has(current.status) && Date.now() + WAIT_POLL_MS <= deadline) {
     await deps.sleep(WAIT_POLL_MS);
     current = (await deps.store.readJob(null, current.id)) ?? current;
@@ -150,6 +153,7 @@ async function statusBody<Tx>(deps: OpsDeps<Tx>, job: ExportJobRow): Promise<Ops
 
 /** GET /api/ops/export-jobs/[job_id] (5.1, 5.2). */
 export async function opsGetStatus<Tx>(deps: OpsDeps<Tx>, request: Request, job_id: string): Promise<Response> {
+  const started = Date.now();
   if (!(await deps.verify(request.headers.get("authorization")))) return opsUnauthenticated();
   const job = await existingJob(deps, job_id);
   if (!job) return opsNotFound();
@@ -160,7 +164,7 @@ export async function opsGetStatus<Tx>(deps: OpsDeps<Tx>, request: Request, job_
   const expect = params.get("expect");
   if (expect !== null && expect !== "succeeded") return opsError("validation_failed", "expect accepts only succeeded.", { field: "expect" });
 
-  const settled = await waitWhileActive(deps, await expired(deps, job), wait);
+  const settled = await waitWhileActive(deps, await expired(deps, job), wait, started);
   if (expect === "succeeded" && settled.status !== "succeeded") {
     return opsError("expectation_failed", `Job is ${settled.status}; expected succeeded.`, {
       field: "expect",
@@ -200,6 +204,7 @@ function retryFailure(response: Extract<CommandResponse<"retry_card_export">, { 
 
 /** POST /api/ops/export-jobs/[job_id]/retry (5.3, 5.4). */
 export async function opsRetry<Tx>(deps: OpsDeps<Tx>, request: Request, job_id: string): Promise<Response> {
+  const started = Date.now();
   if (!(await deps.verify(request.headers.get("authorization")))) return opsUnauthenticated();
   const idempotency_key = request.headers.get(IDEMPOTENCY_KEY_HEADER);
   if (!isValidIdempotencyKey(idempotency_key)) {
@@ -232,7 +237,7 @@ export async function opsRetry<Tx>(deps: OpsDeps<Tx>, request: Request, job_id: 
   // D53: a fresh retry starts /run at once; the dispatcher's own after-commit kick is a harmless twin.
   if (!replayed && outcome === "retried") deps.kick(job.id);
 
-  const settled = await waitWhileActive(deps, (await deps.store.readJob(null, job.id)) ?? job, wait);
+  const settled = await waitWhileActive(deps, (await deps.store.readJob(null, job.id)) ?? job, wait, started);
   const wedding = await deps.store.readWedding(null, settled.wedding_id);
   const latest_revision = wedding?.published_revision ?? null;
   const artifact = artifactOf(settled);

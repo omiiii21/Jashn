@@ -59,12 +59,13 @@ export async function claimJob<Tx>(deps: WorkerDeps<Tx>, job_id: string): Promis
     if (job.status !== "queued") return { kind: "not_started", status: job.status };
     const now = deps.now();
     const attempt = job.attempts + 1;
-    const drill = job.fail_injection === "once";
+    // The drill fails attempt 1 only (2.5, 4.2); a later attempt always renders.
+    const drill = job.fail_injection === "once" && attempt === 1;
     const claimed = await deps.store.updateJob(
       tx,
       job.id,
       { status: "queued", attempts: job.attempts },
-      { status: "rendering", attempts: attempt, lease_until: leaseUntil(now), fail_injection: drill ? "consumed" : job.fail_injection },
+      { status: "rendering", attempts: attempt, lease_until: leaseUntil(now), fail_injection: job.fail_injection === "once" ? "consumed" : job.fail_injection },
       now,
     );
     if (!claimed) return { kind: "not_started", status: job.status };

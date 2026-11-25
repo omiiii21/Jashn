@@ -89,7 +89,12 @@ export function toJobView(job: ExportJobRow, attempts: readonly ExportAttemptRow
     last_error: code && job.last_error_at ? { code, message: job.last_error_message ?? "", at: istInstant(job.last_error_at) } : null,
     notified_at: job.notified_at ? istInstant(job.notified_at) : null,
     stalled,
-    can_retry: context.role === "owner" && (job.status === "failed" || stalled) && job.attempts < job.max_attempts && !out_of_date,
+    // A stalled queued job's waiting attempt counts once it fails (2.1 row 6).
+    can_retry:
+      context.role === "owner" &&
+      (job.status === "failed" || stalled) &&
+      (job.status === "queued" ? job.attempts + 1 : job.attempts) < job.max_attempts &&
+      !out_of_date,
     out_of_date,
     download_url: job.status === "succeeded" && job.artifact_path ? context.download_url : null,
     created_at: istInstant(job.created_at),

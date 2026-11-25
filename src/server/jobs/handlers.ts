@@ -59,6 +59,8 @@ export async function expireIfDue<Tx>(deps: JobDeps<Tx>, tx: Tx, job: ExportJobR
       last_error_code: code,
       last_error_message: EXPORT_ERRORS[code].message,
       last_error_at: now,
+      // An armed drill belongs to attempt 1; once that attempt fails it is spent (4.2).
+      ...(job.fail_injection === "once" ? { fail_injection: "consumed" as const } : {}),
     },
     now,
   );

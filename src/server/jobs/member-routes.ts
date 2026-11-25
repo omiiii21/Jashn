@@ -6,7 +6,7 @@ import type { CommandEnvelope, CommandResponse } from "@/contracts/commands";
 import type { WeddingId } from "@/contracts/domain";
 import { httpStatusOf } from "@/contracts/services";
 import { isUuidShaped } from "@/db/ids";
-import { getSession, requireMember } from "@/server/auth/session";
+import { requireMemberForApi } from "@/server/authz/guard";
 import { services } from "@/server/services";
 
 import { webhookDeps } from "./deps";
@@ -23,7 +23,6 @@ function json(body: unknown, status: number): Response {
   return Response.json(body, { status, headers: NO_STORE });
 }
 
-const UNAUTHENTICATED = { ok: false, error: { code: "unauthenticated", message: "Sign in to continue." } };
 const NOT_FOUND = { ok: false, error: { code: "not_found", message: "Not found." } };
 const BAD_BODY = { ok: false, error: { code: "validation_failed", message: "required", field: "idempotency_key" } };
 
@@ -41,21 +40,26 @@ function keyOf(body: Record<string, unknown> | null): string | null {
   return typeof key === "string" && /^[\x20-\x7E]{8,200}$/.test(key) ? key : null;
 }
 
-/** A member found a lazy failure: the first-failure webhook goes out after the answer (2.8). */
-function webhookIfFirstFailure(response: CommandResponse): void {
-  if (!response.ok) return;
+/**
+ * A member's request found a lazy failure: the first-failure webhook goes out after the
+ * answer (2.8), only for a failure committed during this request.
+ */
+function webhookIfFirstFailure(response: CommandResponse, found_since: Date): void {
+  if (!response.ok || response.outcome === "replayed") return;
   const result = response.result as { job_id?: unknown; status?: unknown; notified_at?: unknown } | null;
   if (result && typeof result.job_id === "string" && result.status === "failed" && !result.notified_at) {
     const job_id = result.job_id;
     after(async () => {
-      await sendFirstFailureWebhook(webhookDeps, job_id).catch(() => false);
+      await sendFirstFailureWebhook(webhookDeps, job_id, { found_since }).catch(() => false);
     });
   }
 }
 
 export async function postExport(request: Request, wedding_id: WeddingId): Promise<Response> {
-  if (!(await getSession())) return json(UNAUTHENTICATED, 401);
-  const actor = await requireMember(wedding_id);
+  const started = new Date();
+  const member = await requireMemberForApi(wedding_id);
+  if (!member.ok) return member.response;
+  const actor = member.actor;
   const body = await readBody(request);
   const idempotency_key = keyOf(body);
   if (!idempotency_key) return json(BAD_BODY, 422);
@@ -68,13 +72,15 @@ export async function postExport(request: Request, wedding_id: WeddingId): Promi
     source: "ui",
   };
   const response = await services.dispatch(actor, envelope);
-  webhookIfFirstFailure(response);
+  webhookIfFirstFailure(response, started);
   return json(response, httpStatusOf(response));
 }
 
 export async function postExportRetry(request: Request, wedding_id: WeddingId, job_id: string): Promise<Response> {
-  if (!(await getSession())) return json(UNAUTHENTICATED, 401);
-  const actor = await requireMember(wedding_id);
+  const started = new Date();
+  const member = await requireMemberForApi(wedding_id);
+  if (!member.ok) return member.response;
+  const actor = member.actor;
   if (!isUuidShaped(job_id)) return json(NOT_FOUND, 404);
   const idempotency_key = keyOf(await readBody(request));
   if (!idempotency_key) return json(BAD_BODY, 422);
@@ -86,6 +92,6 @@ export async function postExportRetry(request: Request, wedding_id: WeddingId, j
     idempotency_key,
     source: "ui",
   });
-  webhookIfFirstFailure(response);
+  webhookIfFirstFailure(response, started);
   return json(response, httpStatusOf(response));
 }

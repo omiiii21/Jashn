@@ -1,6 +1,7 @@
 import "server-only";
 
 import { EXPORT_FAILED_WEBHOOK_TYPE, WEBHOOK_TIMEOUT_MS, type ExportErrorCode, type ExportFailedWebhook } from "@/contracts/jobs";
+import type { BumpVersion } from "@/contracts/services";
 
 import type { JobStore } from "./store";
 import { utcSeconds } from "./state";
@@ -13,17 +14,32 @@ import { utcSeconds } from "./state";
  */
 export type WebhookDeps<Tx> = {
   store: JobStore<Tx>;
+  /** `notified_at` changes the panel's line, so it moves the version like every transition (2.4). */
+  bumpVersion: BumpVersion<Tx>;
   url: () => string | undefined;
   fetch: typeof fetch;
   now: () => Date;
   log: (message: string, fields?: Record<string, string | number>) => void;
 };
 
-export async function sendFirstFailureWebhook<Tx>(deps: WebhookDeps<Tx>, job_id: string): Promise<boolean> {
+/**
+ * `found_since`: the member routes' case. They send only for a lazy failure committed during
+ * their own request (LEASE_EXPIRED or NOT_STARTED at or after the request began), never for
+ * one an ops route or an earlier request found (2.8).
+ */
+export async function sendFirstFailureWebhook<Tx>(
+  deps: WebhookDeps<Tx>,
+  job_id: string,
+  options: { found_since?: Date } = {},
+): Promise<boolean> {
   const url = deps.url();
   if (!url) return false;
   const job = await deps.store.readJob(null, job_id);
   if (!job || job.status !== "failed" || job.notified_at || !job.last_error_code) return false;
+  if (options.found_since) {
+    const lazy = job.last_error_code === "LEASE_EXPIRED" || job.last_error_code === "NOT_STARTED";
+    if (!lazy || !job.last_error_at || job.last_error_at.getTime() < options.found_since.getTime()) return false;
+  }
   const attempts = await deps.store.listAttempts(null, job_id);
   const earlierFailure = attempts.some((attempt) => attempt.status === "failed" && attempt.attempt_no < job.attempts);
   if (earlierFailure) return false;
@@ -55,9 +71,13 @@ export async function sendFirstFailureWebhook<Tx>(deps: WebhookDeps<Tx>, job_id:
     return false;
   }
   const now = deps.now();
+  // Recorded even if a retry started meanwhile: the notification did go out.
   await deps.store.transaction(async (tx) => {
     await deps.store.lockWedding(tx, job.wedding_id);
-    await deps.store.updateJob(tx, job.id, { status: "failed", attempts: job.attempts }, { notified_at: now }, now);
+    const locked = await deps.store.lockJob(tx, job.id);
+    if (!locked || locked.notified_at) return;
+    await deps.store.updateJob(tx, job.id, {}, { notified_at: now }, now);
+    await deps.bumpVersion(tx, job.wedding_id);
   });
   deps.log("webhook sent", { job: job.id, status });
   return true;

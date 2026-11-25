@@ -96,6 +96,10 @@ function harness(options: { is_sample?: boolean; published_revision?: number } =
       await sendFirstFailureWebhook(
         {
           store,
+          bumpVersion: async () => {
+            h.versions += 1;
+            return h.versions;
+          },
           url: () => "https://hooks.example.invalid/x",
           fetch: async () => {
             h.webhooks.push(job_id);
@@ -317,6 +321,65 @@ describe("the drill", () => {
       [1, "request", "failed"],
       [2, "nudgebee", "succeeded"],
     ]);
+  });
+
+  it("a lost kick spends the drill on attempt 1's NOT_STARTED; the retry renders normally", async () => {
+    const h = harness();
+    h.setFlags(flags({ export_failure_drill: flag(true, WEDDING) }));
+    const { result } = await request(h);
+    later(h, 61_000);
+    const retried = await retry(h, result.job_id, mira, "owner-retry-0001", { expected_export_key: exportKey(WEDDING, 3, "png") });
+    expect(retried.result).toMatchObject({ retry_outcome: "retried", attempt: 2, status: "queued" });
+
+    await runOnce(h, result.job_id);
+    expect(h.rendered).toEqual([result.job_id]);
+    expect(h.state.jobs[0]).toMatchObject({ status: "succeeded", attempts: 2, fail_injection: "consumed" });
+    expect(h.state.attempts.map((a) => [a.attempt_no, a.status, a.error_code])).toEqual([
+      [1, "failed", "NOT_STARTED"],
+      [2, "succeeded", null],
+    ]);
+    expect(h.activity.some((entry) => /deliberate drill/.test(entry.summary_en))).toBe(false);
+  });
+});
+
+describe("the first-failure webhook", () => {
+  it("moves the version when it records notified_at, so open panels show NudgeBee was notified", async () => {
+    const h = harness();
+    const { result } = await request(h);
+    h.failRender = new JobRenderFailure("RENDER_FAILED", "boom");
+    const claim = await claimJob(h.deps, result.job_id);
+    if (claim.kind === "started") await finishJob({ ...h.deps, notifyFailure: async () => undefined }, claim);
+    expect(h.state.jobs[0].notified_at).toBeNull();
+    const before = h.versions;
+    await h.deps.notifyFailure(result.job_id);
+    expect(h.state.jobs[0].notified_at).not.toBeNull();
+    expect(h.versions).toBe(before + 1);
+    // Once is enough: a second call sends nothing and moves nothing.
+    await h.deps.notifyFailure(result.job_id);
+    expect(h.webhooks).toHaveLength(1);
+    expect(h.versions).toBe(before + 1);
+  });
+
+  it("a member request sends only for a lazy failure it found itself", async () => {
+    const h = harness();
+    const { result } = await request(h);
+    h.failRender = new JobRenderFailure("RENDER_FAILED", "boom");
+    const claim = await claimJob(h.deps, result.job_id);
+    if (claim.kind === "started") await finishJob({ ...h.deps, notifyFailure: async () => undefined }, claim);
+    const webhook = {
+      store: h.deps.store,
+      bumpVersion: async () => 0,
+      url: () => "https://hooks.example.invalid/x",
+      fetch: async () => {
+        h.webhooks.push(result.job_id);
+        return new Response(null, { status: 200 });
+      },
+      now: () => h.clock.now,
+      log: () => undefined,
+    };
+    // RENDER_FAILED was the worker's to report: a member's request never sends it.
+    expect(await sendFirstFailureWebhook(webhook, result.job_id, { found_since: h.clock.now })).toBe(false);
+    expect(h.webhooks).toEqual([]);
   });
 });
 
