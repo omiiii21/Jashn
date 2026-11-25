@@ -409,6 +409,27 @@ async function fillRefsFromTranscript(ctx: ResolveContext, access: ReadAccess): 
       const value = read(item.phrase);
       if (value !== null && value > 0) next[item.field] = value;
     }
+    // Heard words in another script than the transcript (live M-03: heard "चालीस hazaar" for
+    // the typed "chaalis hazaar"): the words code finds in the transcript for that value replace them.
+    const heardBefore = next.heard ?? [];
+    heardBefore.forEach((item, position) => {
+      const read = HEARD_FALLBACK.find(([field]) => field === item.field)?.[1];
+      const value = next[item.field];
+      if (!read || typeof value !== "number") return;
+      if (normalizeForMatch(transcript).includes(normalizeForMatch(item.phrase))) return;
+      const phrase = spanReading(transcript, value, read);
+      if (phrase) next.heard = (next.heard ?? heardBefore).map((h, i) => (i === position ? { ...h, phrase } : h));
+    });
+    // A payment with no amount (live M-03, 3 of 5 calls: correct_payment with only previous_inr):
+    // code reads the one amount the sentence says, other than the old one (3.1 step 1).
+    if (PAYMENT_KINDS.has(action.kind) && typeof next.amount_inr !== "number") {
+      const found = soleAmount(transcript, typeof next.previous_inr === "number" ? next.previous_inr : null);
+      if (found) {
+        next.amount_inr = found.value;
+        next.heard = [...(next.heard ?? []).filter((h) => h.field !== "amount_inr"), { field: "amount_inr", phrase: found.phrase }];
+        filled.push(`${index}:amount_inr`, "amount_inr");
+      }
+    }
     // A number with no heard words: code looks for the words in the transcript itself (3.1
     // step 1). Only a span that reads as exactly that value counts; otherwise 3.1's
     // "no phrase given" rule stands and the field stays uncertain.
@@ -421,8 +442,44 @@ async function fillRefsFromTranscript(ctx: ResolveContext, access: ReadAccess): 
     }
     return next;
   });
+  // A correction the model split in two (live M-03: correct_payment with only previous_inr, plus
+  // a record_payment of the said amount to the same vendor): one sentence is one correction, never
+  // a new payment as well. The payment's amount goes to the correction, and the payment goes.
+  const splitPayments = new Set<number>();
+  for (const correction of actions) {
+    if (correction.kind !== "correct_payment" || !said(correction.vendor_id)) continue;
+    for (const [pi, payment] of actions.entries()) {
+      if (payment.kind !== "record_payment" || payment.vendor_id !== correction.vendor_id || typeof payment.amount_inr !== "number") continue;
+      if (typeof correction.amount_inr !== "number") {
+        // Only the sentence's one amount moves: with two amounts said, both actions stay (main's ask).
+        const sole = soleAmount(transcript, typeof correction.previous_inr === "number" ? correction.previous_inr : null);
+        if (!sole || sole.value !== payment.amount_inr) continue;
+        correction.amount_inr = payment.amount_inr;
+        const heardAmount = (payment.heard ?? []).find((h) => h.field === "amount_inr");
+        if (heardAmount) correction.heard = [...(correction.heard ?? []).filter((h) => h.field !== "amount_inr"), heardAmount];
+      }
+      if (correction.amount_inr === payment.amount_inr) splitPayments.add(pi);
+    }
+  }
+  // The same payment corrected twice (live, "pachaas hazaar nahi, chaalis hazaar tha": a second
+  // correct_payment of PAY-01 with only invented fields): the first one stands.
+  actions.forEach((later, li) => {
+    if (later.kind !== "correct_payment") return;
+    const first = actions.findIndex((a, fi) => fi < li && a.kind === "correct_payment" && !splitPayments.has(fi) &&
+      (said(a.payment_id) && said(later.payment_id) ? a.payment_id === later.payment_id : said(a.vendor_id) && a.vendor_id === later.vendor_id));
+    if (first < 0) return;
+    if (typeof later.amount_inr !== "number" || later.amount_inr === actions[first].amount_inr) splitPayments.add(li);
+  });
+  // A claim the model also put on a sibling balance question (live M-03: query_balance
+  // user_claim_inr 40000 beside the correct_payment of 40000) is the payment's amount, not a claim
+  // to check: the question goes, and with it the "Nahi, … baaki hai" rebuttal.
+  const paidAmounts = new Set(
+    actions.filter((a) => PAYMENT_KINDS.has(a.kind) && typeof a.amount_inr === "number").map((a) => a.amount_inr as number),
+  );
   // A question nobody asked (V-T4, O-01: a query_budget next to "Caterer को अब कितना देना है?").
   const keep = actions.map((action) => {
+    if (action.kind === "query_balance" && typeof action.user_claim_inr === "number" && paidAmounts.has(action.user_claim_inr) && !BALANCE_ASK_WORDS.some((word) => hasWords(transcript, word)) && !transcript.includes("?")) return false;
+    if (splitPayments.has(actions.indexOf(action))) return false;
     const cues = ASK_CUES[action.kind];
     return !cues || cues.some((word) => hasWords(transcript, word));
   });
@@ -496,6 +553,9 @@ const ASK_CUES: Partial<Record<ActionKind, string[]>> = {
 
 const TODAY_WORDS = ["today", "aaj", "aj", "आज"];
 
+/** Words of a balance question: with one of these, a claim is a question to answer, not noise. */
+const BALANCE_ASK_WORDS = ["baaki", "baki", "बाकी", "बाक़ी", "kitna", "कितना", "kitne", "कितने", "left", "owe", "remaining", "pending", "dena", "देना"];
+
 /** Numeric fields code can find words for, and how each is read (3.2). */
 const HEARD_FALLBACK: [string, (phrase: string) => number | null][] = [
   ["amount_inr", readAmount],
@@ -526,6 +586,54 @@ function spanReading(transcript: string, value: number, read: (phrase: string) =
     if (hits.size > 1) return null;
   }
   return null;
+}
+
+/** Words that make a number money: a scale word or a rupee word. */
+const MONEY_WORDS = ["hazaar", "hazar", "hajar", "हज़ार", "हजार", "thousand", "lakh", "lac", "lakhs", "लाख", "crore", "करोड़", "करोड", "rupaye", "rupees", "रुपये", "rs"];
+
+/**
+ * A span that says money: it ends on a scale or rupee word ("chaalis hazaar", not "chaalis hazaar
+ * do", where "do" is "give"), or is a ₹ figure or an Indian-grouped figure ("40,000"). A bare
+ * "2026" or "300" is a year or a count, never an amount read by code.
+ */
+function moneyLike(phrase: string): boolean {
+  const words = phrase.split(/\s+/);
+  const last = normalizeForMatch(words[words.length - 1] ?? "");
+  if (MONEY_WORDS.some((word) => normalizeForMatch(word) === last)) return true;
+  return words.length === 1 && /^(₹\s?)?[0-9०-९]{1,3}([,][0-9०-९]{2,3})+$|^₹\s?[0-9०-९]+$/.test(words[0]);
+}
+
+/** Payment writes whose amount_inr is the money the sentence says was paid. */
+const PAYMENT_KINDS = new Set<string>(["record_payment", "correct_payment"]);
+
+/**
+ * The one amount a sentence says, other than `previous` ("Caterer ko chaalis hazaar advance diya
+ * tha" → 40000, heard "chaalis hazaar"). Null when it says none, or two different amounts.
+ */
+export function soleAmount(transcript: string, previous: number | null): { value: number; phrase: string } | null {
+  const words = transcript.replace(/[?!।]/g, " ").replace(/,(?!\d)/g, " ").replace(/\.(?!\d)/g, " ").split(/\s+/).filter(Boolean);
+  const spans: { start: number; end: number; value: number; phrase: string }[] = [];
+  for (let size = 1; size <= Math.min(4, words.length); size += 1) {
+    for (let start = 0; start + size <= words.length; start += 1) {
+      const phrase = words.slice(start, start + size).join(" ");
+      const value = readAmount(phrase);
+      if (value !== null && value >= 100 && moneyLike(phrase)) spans.push({ start, end: start + size, value, phrase });
+    }
+  }
+  const candidates = spans.filter((span) => span.value !== previous);
+  if (candidates.length === 0) return null;
+  const best = Math.max(...candidates.map((span) => span.value));
+  // Words inside the best amount, or inside the old amount, are part of those: "hazaar" alone
+  // is not a second amount. Any other amount anywhere else makes the sentence ambiguous.
+  const covered = new Set<number>();
+  for (const span of spans) {
+    if (span.value !== best && span.value !== previous) continue;
+    for (let i = span.start; i < span.end; i += 1) covered.add(i);
+  }
+  const other = spans.some((span) => span.value !== best && span.value !== previous && Array.from({ length: span.end - span.start }, (_, k) => span.start + k).some((i) => !covered.has(i)));
+  if (other) return null;
+  const shortest = candidates.filter((span) => span.value === best).sort((a, b) => a.end - a.start - (b.end - b.start) || a.start - b.start)[0];
+  return { value: best, phrase: shortest.phrase };
 }
 
 /** Counts the model may only fill from words it heard; money keeps 3.1's uncertain rule. */
