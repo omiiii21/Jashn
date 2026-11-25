@@ -1,0 +1,23 @@
+{
+ "row_id": "O-01",
+ "start_state": "D0",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Caterer को अब कितना देना है?",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "ask",
+  "reply_language": "hinglish",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "query_balance",
+    "scope": "vendor",
+    "vendor_id": "VEN-CAT"
+   }
+  ]
+ },
+ "audio_text": null
+}

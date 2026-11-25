@@ -1,0 +1,22 @@
+{
+ "row_id": "G-01",
+ "start_state": "D0",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Who's attending the reception?",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "ask",
+  "reply_language": "en",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "query_rsvp",
+    "event_id": "EVT-REC"
+   }
+  ]
+ },
+ "audio_text": null
+}
