@@ -302,7 +302,7 @@ export async function assertSameWedding(
 // The dispatcher
 // ---------------------------------------------------------------------------
 
-type Committed = { kind: "committed"; response: CommandSuccess; wedding_id: WeddingId | null };
+type Committed = { kind: "committed"; response: CommandSuccess; wedding_id: WeddingId | null; actor: CommandActor };
 type TxOutcome = Committed | { kind: "receipt"; match: ReceiptMatch };
 
 function fromMatch<C extends CommandName>(match: ReceiptMatch): CommandResponse<C> {
@@ -535,7 +535,7 @@ export function createDispatcher(overrides: Partial<DispatcherDeps> = {}) {
             created_at: now,
           });
         }
-        return { kind: "committed", response, wedding_id: effectiveWedding };
+        return { kind: "committed", response, wedding_id: effectiveWedding, actor: handlerActor };
       });
     } catch (error) {
       if (error instanceof CommandFailure) return failWith(error.body);
@@ -560,7 +560,7 @@ export function createDispatcher(overrides: Partial<DispatcherDeps> = {}) {
           try {
             await afterHandler({
               command,
-              actor,
+              actor: committed.actor,
               wedding_id: committed.wedding_id,
               envelope: rawEnvelope as CommandEnvelope,
               response: response as CommandSuccess,
@@ -569,11 +569,12 @@ export function createDispatcher(overrides: Partial<DispatcherDeps> = {}) {
             deps.log("after-commit handler failed", { command, ...describeError(error) });
           }
         }
-        if (command === "set_wedding_profile" && actor.kind !== "guest" && actor.kind !== "system") {
+        const hookActor = committed.actor;
+        if (command === "set_wedding_profile" && hookActor.kind !== "guest" && hookActor.kind !== "system") {
           try {
             const opened = (input as { setup_opened_at?: unknown }).setup_opened_at;
             await deps.onSetupSaved({
-              actor,
+              actor: hookActor,
               outcome: response.outcome,
               is_create: isCreate,
               wedding_id: isCreate ? committed.wedding_id : null,

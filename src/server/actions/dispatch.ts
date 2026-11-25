@@ -23,7 +23,13 @@ export async function dispatchCommand(envelope: CommandEnvelope): Promise<Comman
 
   const raw = (envelope ?? {}) as { wedding_id?: unknown };
   const wedding_id = typeof raw.wedding_id === "string" && raw.wedding_id ? raw.wedding_id : null;
-  const actor = wedding_id ? await loadMemberActor(user, wedding_id) : await buildUserActor(user);
+  let actor: Awaited<ReturnType<typeof buildUserActor>> | null;
+  try {
+    actor = wedding_id ? await loadMemberActor(user, wedding_id) : await buildUserActor(user);
+  } catch {
+    // A database outage answers the error envelope, like the dispatcher, never a thrown action.
+    return { ok: false, error: { code: "internal_error", message: "Something went wrong. Nothing was saved.", field: null } };
+  }
   if (!actor) {
     return { ok: false, error: { code: "forbidden", message: "You are not a member of this wedding.", field: null } };
   }

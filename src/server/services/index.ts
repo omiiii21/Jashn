@@ -31,9 +31,9 @@ async function guardedSharing(name: ReadModelName, actor: Parameters<Services["r
 const realServices: Services = {
   /**
    * Commands with a real handler run through the dispatcher. Until a command's handler map
-   * merges (Lane A's at 14:45, Lane D's in its own PRs), it keeps the fixture answer
-   * instead of a 500, so screens built on fixtures keep working in live mode. The fixture
-   * dispatch writes nothing.
+   * merges (Lane A's at 14:45, Lane D's in its own PRs), it keeps the fixture answer, which
+   * still applies the role matrix and validation but writes nothing, so screens built on
+   * fixtures keep working in live mode (the lead's call, 13:25).
    */
   dispatch: (actor, envelope) =>
     handlerFor((envelope as { command?: CommandName }).command as CommandName)

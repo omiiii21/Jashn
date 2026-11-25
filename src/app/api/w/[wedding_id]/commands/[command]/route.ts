@@ -60,7 +60,13 @@ function exponentField(text: string): string | null | undefined {
 export async function POST(request: Request, context: { params: Promise<{ wedding_id: string; command: string }> }) {
   const { wedding_id, command } = await context.params;
 
-  const member = await requireMemberForApi(wedding_id);
+  let member: Awaited<ReturnType<typeof requireMemberForApi>>;
+  try {
+    member = await requireMemberForApi(wedding_id);
+  } catch {
+    // A database outage answers the JSON error envelope, never an HTML 500.
+    return errorResponse({ code: "internal_error", message: "Something went wrong. Nothing was saved.", field: null });
+  }
   if (!member.ok) return member.response;
   if (!isCommandName(command)) return errorResponse({ code: "not_found", message: "Unknown command.", field: "command" });
 
