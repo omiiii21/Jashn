@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { CommandFailure, commandSchemas, type CommandEnvelope, type CommandName, type CommandResponse } from "@/contracts/commands";
 import type { CommandActor, GuestActor, GuestInvitationView, SessionActor } from "@/contracts/domain";
@@ -58,7 +58,19 @@ let dataset: SeedDataset;
 
 const mira: SessionActor = fixtureSessionActor("mira", COPY);
 const diya: SessionActor = fixtureSessionActor("diya", COPY);
-const tara: GuestActor = fixtureGuestActor(COPY);
+// Tara's actor carries the hash of H16's active link: the dispatcher re-checks it under the
+// wedding lock, and a test below rotates that link, so it is refreshed before every test.
+let tara: GuestActor = fixtureGuestActor(COPY);
+
+async function withActiveLink(actor: GuestActor): Promise<GuestActor> {
+  const [link] = await db
+    .select({ token_hash: invitationLinks.token_hash })
+    .from(invitationLinks)
+    .where(and(eq(invitationLinks.household_id, actor.household_id), isNull(invitationLinks.revoked_at)))
+    .limit(1);
+  if (!link) throw new Error("H16 has no active link");
+  return { ...actor, token_hash: Buffer.from(link.token_hash).toString("hex") };
+}
 
 /** Runs one handler as the dispatcher would: the wedding row locked first, the input parsed. */
 async function run<C extends CommandName>(command: C, actor: CommandActor, raw: Record<string, unknown>): Promise<CommandHandlerResult<C>> {
@@ -148,6 +160,10 @@ describe.skipIf(!url)("guest commands (database, copy demo)", () => {
       await ensureInvitationLinks(tx, dataset);
     });
   }, 60_000);
+
+  beforeEach(async () => {
+    tara = await withActiveLink(fixtureGuestActor(COPY));
+  });
 
   afterAll(async () => {
     if (!db) return;
