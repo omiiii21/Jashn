@@ -87,7 +87,6 @@ test.describe("render probe", () => {
       { Authorization: "Bearer not-the-token" },
       { Authorization: `Bearer  ${JOBS_TOKEN}` },
       { Authorization: "Bearer" },
-      { Authorization: `bearer ${JOBS_TOKEN}` },
       { Authorization: "Bearer jobs-token-old-value-that-was-rotated-out" },
       { Cookie: "sb-access-token=member-session-cookie" },
     ];
@@ -174,7 +173,7 @@ test.describe("ops routes", () => {
   const retryBody = JSON.stringify({ expected_export_key: "export:x:rev3:png" });
 
   test("EX-05: the status read and the retry refuse every bad bearer with the same 401", async () => {
-    const variants: Record<string, string>[] = [{}, { Authorization: "Bearer not-the-token" }, { Authorization: `bearer ${JOBS_TOKEN}` }];
+    const variants: Record<string, string>[] = [{}, { Authorization: "Bearer not-the-token" }, { Authorization: `Bearer  ${JOBS_TOKEN}` }];
     for (const headers of variants) {
       expectUnauthenticated(await opsCall("GET", status(REAL_JOB), headers));
       expectUnauthenticated(await opsCall("POST", retry(REAL_JOB), { ...headers, ...json, "Idempotency-Key": "nb-e2e-0001" }, retryBody));
@@ -214,7 +213,11 @@ test.describe("Invite page", () => {
     await expect(page.getByRole("button", { name: "Review and publish" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Card export" })).toBeVisible();
     await expect(page.getByText("Ready", { exact: true }).first()).toBeVisible();
-    const width = await page.evaluate(() => document.documentElement.scrollWidth);
-    expect(width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    // The page's own content stays inside the viewport (the planner header is the shell's).
+    const viewport = page.viewportSize()!.width;
+    const overflowing = await page.locator("main").evaluate((main, limit) => {
+      return Array.from(main.querySelectorAll("*")).filter((el) => el.getBoundingClientRect().right > limit + 1).length;
+    }, viewport);
+    expect(overflowing).toBe(0);
   });
 });

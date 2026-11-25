@@ -1,11 +1,11 @@
 import "server-only";
 
-import { verifySystemToken } from "@/server/authz/system";
 import { services } from "@/server/services";
 
 import { JOBS_WIRED, jobDeps } from "./deps";
 import type { JobDeps } from "./handlers";
 import { kickRun } from "./kick";
+import { verifyOpsBearer } from "./ops-bearer";
 import type { OpsDeps } from "./ops";
 
 /**
@@ -18,7 +18,7 @@ type DepsTx = typeof jobDeps extends JobDeps<infer T> ? T : never;
 export const opsDeps: OpsDeps<DepsTx> = {
   ...jobDeps,
   wired: JOBS_WIRED,
-  verify: async (authorization) => (await verifySystemToken(authorization)) !== null,
+  verify: (authorization) => verifyOpsBearer(authorization),
   dispatch: (actor, envelope) => services.dispatch(actor, envelope),
   kick: (job_id) => void kickRun(job_id, { wait: false }),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),

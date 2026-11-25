@@ -6,10 +6,10 @@ import { isUuidShaped } from "@/db/ids";
 import { RenderError, renderErrorMessage, type RenderTestMode } from "@/server/export/chromium";
 import { RenderTokenSecretMissing } from "@/server/export/render-token";
 import { renderProbe, renderTimingHeaders } from "@/server/export/probe";
-import { verifySystemToken } from "@/server/authz/system";
 import { JOBS_WIRED, workerDeps } from "@/server/jobs/deps";
 import { OPS_HEADERS, opsError, opsJson, opsNotFound, opsUnauthenticated } from "@/server/jobs/ops-http";
 import { claimJob, finishJob } from "@/server/jobs/worker";
+import { verifyOpsBearer } from "@/server/jobs/ops-bearer";
 
 /**
  * The worker route (export-and-recovery 3.2 and 3.3), the only route that runs Chromium.
@@ -36,7 +36,7 @@ function logLine(fields: Record<string, string | number>): void {
 }
 
 export async function POST(request: Request, context: RouteContext<"/api/ops/export-jobs/[job_id]/run">) {
-  if (!(await verifySystemToken(request.headers.get("authorization")))) return opsUnauthenticated();
+  if (!(await verifyOpsBearer(request.headers.get("authorization")))) return opsUnauthenticated();
 
   const { job_id } = await context.params;
   if (job_id !== PROBE_JOB_ID) return runJob(job_id);
