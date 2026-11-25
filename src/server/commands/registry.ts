@@ -9,6 +9,7 @@ import { demoHandlers } from "./demo";
 import { eventHandlers } from "./events";
 import { guestHandlers } from "./guests";
 import { ledgerHandlers } from "./ledger";
+import { memberHandlers } from "./members";
 import { proposalHandlers } from "./proposals";
 import { weddingProfileHandlers } from "./wedding-profile";
 
@@ -31,7 +32,7 @@ const LANE_A_MAPS: HandlerMap[] = [
   ledgerHandlers,
   proposalHandlers,
   guestHandlers,
-  // memberHandlers (A6),
+  memberHandlers,
 ];
 
 function buildRegistry(): HandlerMap {
