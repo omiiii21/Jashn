@@ -15,7 +15,13 @@ describe("bearerToken", () => {
   it("reads `Bearer <token>`, with the scheme in any case", () => {
     expect(bearerToken(`Bearer ${TOKEN}`)).toBe(TOKEN);
     expect(bearerToken(`bearer ${TOKEN}`)).toBe(TOKEN);
-    expect(bearerToken(`  BEARER   ${TOKEN}  `)).toBe(TOKEN);
+    expect(bearerToken(`BEARER ${TOKEN}`)).toBe(TOKEN);
+  });
+
+  it("refuses extra whitespace anywhere (EX-05)", () => {
+    for (const header of [`  Bearer ${TOKEN}`, `Bearer ${TOKEN} `, `Bearer  ${TOKEN}`, `Bearer\t${TOKEN}`, `Bearer ${TOKEN}\n`, ` BEARER   ${TOKEN}  `]) {
+      expect(bearerToken(header)).toBeNull();
+    }
   });
 
   it("refuses missing, empty and other schemes", () => {
