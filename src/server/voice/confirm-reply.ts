@@ -7,7 +7,8 @@ import { routes, withHighlight } from "@/contracts/routes";
 
 import { factsOf, labelsFor, labelOf, SERVER_FACTS_KEY } from "./preview";
 import { clockHinglishWords, countHi, formatInr, inrWords } from "./resolve/say";
-import { AMOUNT_FIELDS, COUNT_FIELDS, formatDate, formatLongDate, formatTime, speakTimeEn } from "./resolve/support";
+import { AMOUNT_FIELDS, COUNT_FIELDS, formatDate, formatLongDate, formatWeekdayDateHi, speakTimeEn } from "./resolve/support";
+import { dateSpeech } from "./speech";
 import { clockHi } from "./resolve/say";
 import { firstSentenceOf, joinReplies, reply } from "./templates";
 import { WRITE_KINDS, type ReplyText, type ResolvedAction, type StoredResult } from "./types";
@@ -272,9 +273,23 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
       }
       const dateText = date ? formatLongDate(date, false) : "";
       if (r === "hinglish") {
-        return { reply: reply(r, `${name} ${dateText}${start ? `, ${start >= "16:00" && start < "20:00" ? "shaam" : ""} ${formatTime(start)}` : ""}${facts.venue_name ? `, ${facts.venue_name} mein` : ""} add ho gaya.`.replace(/\s+/g, " "), `${name} ${dateText}${start ? `, ${clockHi(start)}` : ""}${facts.venue_name ? `, ${facts.venue_name} में` : ""} add हो गया।`), navigate_path: path };
+        // E-02 (4.10): "Sangeet 13 December, shaam saat baje, Garden Hall mein add ho gaya."; the day in words in speech (3.5).
+        const dateSaid = date ? dateSpeech(date, "hinglish") : "";
+        return {
+          reply: reply(
+            r,
+            `${name} ${dateText}${start ? `, ${clockHinglishWords(start)}` : ""}${facts.venue_name ? `, ${facts.venue_name} mein` : ""} add ho gaya.`.replace(/\s+/g, " "),
+            `${name} ${dateSaid}${start ? `, ${clockHi(start)}` : ""}${facts.venue_name ? `, ${facts.venue_name} में` : ""} add हो गया।`.replace(/\s+/g, " "),
+          ),
+          navigate_path: path,
+        };
       }
-      return { reply: reply(r, `${name} ${dateText}${start ? ` को ${clockHi(start)}` : ""}${facts.venue_name ? `, ${facts.venue_name} में` : ""} जोड़ दिया।`), navigate_path: path };
+      // hi (4.10): "संगीत रविवार, 13 दिसंबर को शाम सात बजे, Garden Hall में जोड़ दिया।", the day in words in speech.
+      const nameHi = facts.event_title_hi ?? name;
+      const dateHi = date ? formatWeekdayDateHi(date) : "";
+      const dateHiSaid = dateHi.replace(/\d+/, (d) => countHi(Number(d)));
+      const tailHi = `${start ? ` को ${clockHi(start)}` : ""}${facts.venue_name ? `, ${facts.venue_name} में` : ""} जोड़ दिया।`;
+      return { reply: reply(r, `${nameHi} ${dateHi}${tailHi}`.replace(/\s+/g, " "), `${nameHi} ${dateHiSaid}${tailHi}`.replace(/\s+/g, " ")), navigate_path: path };
     }
     case "publish_itinerary": {
       const path = wedding_id ? routes.events(wedding_id) : null;
@@ -322,18 +337,62 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
       const dateText = date ? formatLongDate(date) : "";
       if (bride && groom && date) {
         if (r === "en") return { reply: reply(r, `Saved: ${bride} and ${groom}'s wedding, ${dateText}${city}.`), navigate_path: null };
-        if (r === "hinglish") return { reply: reply(r, `${bride} aur ${groom} ki shaadi, ${dateText}${city}. Save ho gayi.`, `${bride} और ${groom} की शादी, ${dateText}${city}। Save हो गई।`), navigate_path: null };
-        return { reply: reply(r, `${bride} और ${groom} की शादी, ${date ? hiDate(date) : ""}${city}। सेव हो गई।`), navigate_path: null };
+        // S-02 (4.10, 3.5): the display keeps "14 December 2026"; speech says the day and the year in words.
+        if (r === "hinglish") return { reply: reply(r, `${bride} aur ${groom} ki shaadi, ${dateText}${city}. Save ho gayi.`, `${bride} और ${groom} की शादी, ${dateSpeech(date, "hinglish", { with_year: true })}${city}। Save हो गई।`), navigate_path: null };
+        return { reply: reply(r, `${bride} और ${groom} की शादी, ${hiDate(date)}${city}। सेव हो गई।`, `${bride} और ${groom} की शादी, ${dateSpeech(date, "hi", { with_year: true })}${city}। सेव हो गई।`), navigate_path: null };
       }
       return { reply: reply(r, r === "en" ? "Saved the wedding details." : "Wedding details save ho gayi.", r === "en" ? undefined : "Wedding details save हो गईं।"), navigate_path: wedding_id ? routes.wedding(wedding_id) : null };
     }
     case "set_rsvp": {
       const path = wedding_id ? routes.guests(wedding_id, typeof input.event_id === "string" ? input.event_id : undefined) : null;
+      const rsvp = rsvpReply(facts, typeof input.rsvp_status === "string" ? input.rsvp_status : facts.rsvp_status ?? null, r);
+      if (rsvp) return { reply: rsvp, navigate_path: path };
       return { reply: reply(r, r === "en" ? "Saved the RSVP." : "RSVP save ho gaya.", r === "en" ? undefined : "RSVP save हो गया।"), navigate_path: path };
     }
     default:
       return { reply: reply(r, r === "en" ? "Saved." : r === "hinglish" ? "Save ho gaya." : "सेव हो गया।", r === "hinglish" ? "Save हो गया।" : undefined), navigate_path: wedding_id ? routes.wedding(wedding_id) : null };
   }
+}
+
+function nameList(names: string[], and: string): string {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} ${and} ${names[names.length - 1]}`;
+}
+
+/**
+ * G-02 (4.10): the guests by their first names as stored, the function, and its attending
+ * count after saving. "Nikhil aur Prachi reception ke liye confirm ho gaye. Ab 231 log aa
+ * rahe hain." Null when the preview had no names, so the generic line stands.
+ */
+function rsvpReply(facts: ReturnType<typeof factsOf>, status: string | null, r: ReplyRegister): ReplyText | null {
+  const names = (facts.guest_names ?? []).map((name) => name.trim().split(/\s+/)[0] ?? name).filter(Boolean);
+  if (names.length === 0 || !facts.event_title || !status) return null;
+  const t = facts.event_title.toLowerCase();
+  const tHi = facts.event_title_hi ?? facts.event_title;
+  const n = facts.attending_after;
+  const one = names.length === 1;
+  if (r === "en") {
+    const who = nameList(names, "and");
+    const first =
+      status === "attending"
+        ? `${who} ${one ? "is" : "are"} confirmed for the ${t}.`
+        : status === "declined"
+          ? `${who} can't come to the ${t}.`
+          : `${who} ${one ? "is" : "are"} marked not replied for the ${t}.`;
+    return reply(r, `${first}${n !== undefined ? ` ${n} ${n === 1 ? "is" : "are"} now coming.` : ""}`);
+  }
+  const countLine = n !== undefined ? { display: ` Ab ${n} log aa rahe hain.`, speech: ` अब ${countHi(n)} लोग आ रहे हैं।` } : { display: "", speech: "" };
+  if (r === "hinglish") {
+    const verb =
+      status === "attending"
+        ? { display: `${t} ke liye confirm ho gaye.`, speech: `${t} के लिए confirm हो गए।` }
+        : status === "declined"
+          ? { display: `${t} mein nahi aa paayenge.`, speech: `${t} में नहीं आ पाएँगे।` }
+          : { display: `${t} ke liye abhi jawab nahi aaya.`, speech: `${t} के लिए अभी जवाब नहीं आया।` };
+    return reply(r, `${nameList(names, "aur")} ${verb.display}${countLine.display}`, `${nameList(names, "और")} ${verb.speech}${countLine.speech}`);
+  }
+  const verbHi = status === "attending" ? `${tHi} के लिए कन्फ़र्म हो गए।` : status === "declined" ? `${tHi} में नहीं आ पाएँगे।` : `${tHi} के लिए अभी जवाब नहीं आया।`;
+  return reply(r, `${nameList(names, "और")} ${verbHi}${countLine.speech}`);
 }
 
 const WEEKDAY_LONG: Record<string, string> = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };

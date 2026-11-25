@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { HighlightOnce } from "@/components/planner";
+import { AddGuestForm } from "@/components/planner/guests/GuestForms";
 import { HouseholdList } from "@/components/planner/guests/HouseholdList";
+import { groupHouseholds } from "@/components/planner/guests/households";
 import { ReplyTable } from "@/components/planner/guests/ReplyTable";
 import { HIGHLIGHT_PARAM, parseHighlight, routes } from "@/contracts/routes";
 import { dispatchCommand } from "@/server/actions/dispatch";
@@ -40,6 +42,10 @@ export default async function GuestsPage({ params, searchParams }: GuestsPagePro
   // Only a function this wedding has filters the list; anything else shows every function.
   const selected = totals.functions.find((row) => row.event_id === requested) ?? null;
   const list = await readModel("rsvp_guest_list", wedding_id, selected ? { event_id: selected.event_id } : {});
+  // Owners set invitations and links (permissions: owner only); a manager's add is limited.
+  const isOwner = profile.member.role === "owner";
+  const functions = totals.functions.map((fn) => ({ event_id: fn.event_id, title: fn.title }));
+  const households = groupHouseholds(list).map((h) => ({ household_id: h.household_id, household_name: h.household_name }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -59,12 +65,21 @@ export default async function GuestsPage({ params, searchParams }: GuestsPagePro
         </p>
       ) : null}
 
+      <AddGuestForm
+        wedding_id={wedding_id}
+        dispatch={dispatchCommand}
+        isOwner={isOwner}
+        functions={functions}
+        households={households}
+      />
+
       <HouseholdList
         wedding_id={wedding_id}
         dispatch={dispatchCommand}
         list={list}
         actorName={profile.member.display_name}
         filterTitle={selected?.title ?? null}
+        ownerFunctions={isOwner ? functions : null}
       />
 
       <HighlightOnce keys={highlight} />

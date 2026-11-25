@@ -33,7 +33,7 @@ import {
   voiceTurns,
   weddings,
 } from "@/db/schema";
-import { localDatabaseUrl } from "@/db/testing";
+import { localDatabaseUrl, lockSampleCopy } from "@/db/testing";
 import { applySeedState, ensureInvitationLinks, hashLinkToken, newLinkToken } from "@/db/seed-apply";
 import { buildSeedDataset, invitationLinkSeedKey, seedAccounts, type SeedDataset } from "@/db/seed-data";
 
@@ -75,6 +75,7 @@ const DIYA_EMAIL = accountEmail(SEED_KEYS.members.diya);
 
 let db: Db;
 let close: () => Promise<void>;
+let releaseCopy: (() => Promise<void>) | undefined;
 let dataset: SeedDataset;
 /** The copy's stored Auth user ids by account email (fixture stand-ins only on a fresh database). */
 let userIds: Record<string, string> = {};
@@ -338,6 +339,8 @@ async function otherWedding(is_sample: boolean): Promise<{ wedding_id: string; o
 
 describe.skipIf(!url)("reset_demo (database, copy a)", () => {
   beforeAll(async () => {
+    // members.db.test.ts also seeds and counts copy a: take turns (src/db/testing.ts).
+    releaseCopy = await lockSampleCopy(url!, COPY);
     const created = createDb(url!, { max: 2 });
     db = created.db;
     close = () => created.client.end();
@@ -361,7 +364,14 @@ describe.skipIf(!url)("reset_demo (database, copy a)", () => {
   }, 60_000);
 
   afterAll(async () => {
-    if (!db) return;
+    try {
+      if (db) await restoreCopy();
+    } finally {
+      await releaseCopy?.();
+    }
+  }, 60_000);
+
+  async function restoreCopy() {
     // Leave copy a at D0, put H16's link back as it was (a reset keeps a revoked link revoked),
     // and remove the rows the test added to kept tables and the throwaway weddings.
     await runReset({ confirm_text: "RESET" }).catch(() => undefined);
@@ -370,7 +380,7 @@ describe.skipIf(!url)("reset_demo (database, copy a)", () => {
     if (liveMembers.length > 0) await db.delete(members).where(inArray(members.id, liveMembers));
     if (throwaway.length > 0) await db.delete(weddings).where(inArray(weddings.id, throwaway));
     await close();
-  }, 60_000);
+  }
 
   it("d0 removes live rows, restores seeded values and keeps links and members", async () => {
     const live = await makeLiveChanges();

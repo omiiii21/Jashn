@@ -368,7 +368,14 @@ describe("role refusals and manager limits", () => {
   });
 
   it("More than 4 actions asks for one or two things at a time", async () => {
-    const many = Array.from({ length: 5 }, () => ({ kind: "query_balance" as const, vendor_id: "VEN-CAT" }));
+    // Five different asks: the same ask repeated is one action (a duplicate, not a structure error).
+    const many: ToolAction[] = [
+      { kind: "query_balance", vendor_id: "VEN-CAT" },
+      { kind: "query_event", event_id: "EVT-REC", detail: "venue" },
+      { kind: "query_event", event_id: "EVT-SAN", detail: "time" },
+      { kind: "query_rsvp", event_id: "EVT-REC" },
+      { kind: "query_catering", vendor_id: "VEN-CAT" },
+    ];
     const out = await resolveTurn(await ctxFor(tool(many, "ask"), "lots", { register: "en" }));
     expect(out.kind === "clarify" && out.question.display_text).toBe("One or two things at a time, please.");
   });

@@ -2,10 +2,11 @@ import { EnvelopeSimple, ForkKnife, LockSimple, Phone } from "@phosphor-icons/re
 
 import { EmptyState, SectionHeading, Wash } from "@/components/planner";
 import type { WeddingId } from "@/contracts/domain";
-import type { RsvpGuestList } from "@/contracts/read-models";
+import type { RsvpGuestList, RsvpGuestListHousehold } from "@/contracts/read-models";
 
 import type { Dispatch } from "../forms/command";
 import { groupHouseholds, replyFormGuests, type Household, type HouseholdGuest } from "./households";
+import { EditInvitations, HouseholdLinks, type FunctionOption } from "./GuestForms";
 import { RecordReplies } from "./RecordReplies";
 import { ReplyLabel } from "./ReplyLabel";
 
@@ -44,7 +45,15 @@ function Contacts({ guest }: { guest: HouseholdGuest }) {
 
 type FunctionColumn = { event_id: string; title: string };
 
-function GuestRow({ guest, functions }: { guest: HouseholdGuest; functions: FunctionColumn[] }) {
+function GuestRow({
+  guest,
+  functions,
+  owner,
+}: {
+  guest: HouseholdGuest;
+  functions: FunctionColumn[];
+  owner: { wedding_id: WeddingId; dispatch: Dispatch; functions: FunctionOption[]; editInvitations: boolean } | null;
+}) {
   return (
     <li
       data-guest-id={guest.guest_id}
@@ -59,6 +68,16 @@ function GuestRow({ guest, functions }: { guest: HouseholdGuest; functions: Func
           </span>
         ) : null}
         <Contacts guest={guest} />
+        {owner?.editInvitations ? (
+          <EditInvitations
+            wedding_id={owner.wedding_id}
+            dispatch={owner.dispatch}
+            guest_id={guest.guest_id}
+            guestName={guest.full_name}
+            functions={owner.functions}
+            invited={guest.replies.map((reply) => reply.event_id)}
+          />
+        ) : null}
       </div>
       {/* One fixed cell per function in the read model's order, so each function keeps its
           column from guest to guest; an empty cell where the guest isn't invited. */}
@@ -87,13 +106,23 @@ function HouseholdBlock({
   household,
   functions,
   actorName,
+  ownerFunctions,
+  filtered,
+  link,
 }: {
   wedding_id: WeddingId;
   dispatch: Dispatch;
   household: Household;
+  /** The household's link state from `households[]`; null when the read model doesn't send it. */
+  link: Pick<RsvpGuestListHousehold, "link_status" | "last_rotated_at"> | null;
   functions: FunctionColumn[];
   actorName: string;
+  /** Every function, for the owner's invitation controls; null for a manager. */
+  ownerFunctions: FunctionOption[] | null;
+  /** On a one-function view the guest's other invitations aren't listed, so the full-list edit is off. */
+  filtered: boolean;
 }) {
+  const owner = ownerFunctions ? { wedding_id, dispatch, functions: ownerFunctions, editInvitations: !filtered } : null;
   const headingId = `household-${household.household_id}`;
   return (
     <li>
@@ -116,7 +145,7 @@ function HouseholdBlock({
         </div>
         <ul aria-label={`Guests in the ${household.household_name} household`}>
           {household.guests.map((guest) => (
-            <GuestRow key={guest.guest_id} guest={guest} functions={functions} />
+            <GuestRow key={guest.guest_id} guest={guest} functions={functions} owner={owner} />
           ))}
         </ul>
         <RecordReplies
@@ -125,6 +154,16 @@ function HouseholdBlock({
           guests={replyFormGuests(household)}
           actorName={actorName}
         />
+        {owner ? (
+          <HouseholdLinks
+            wedding_id={wedding_id}
+            dispatch={dispatch}
+            household_id={household.household_id}
+            householdName={household.household_name}
+            link_status={link?.link_status ?? null}
+            last_rotated_at={link?.last_rotated_at ?? null}
+          />
+        ) : null}
       </article>
     </li>
   );
@@ -189,15 +228,19 @@ export function HouseholdList({
   list,
   actorName,
   filterTitle,
+  ownerFunctions = null,
 }: {
   wedding_id: WeddingId;
   dispatch: Dispatch;
   list: RsvpGuestList;
   actorName: string;
+  /** Owners only: every function, for "Edit invitations" and the link controls. Null hides them. */
+  ownerFunctions?: FunctionOption[] | null;
   /** The function the list is filtered to, for the heading. */
   filterTitle: string | null;
 }) {
   const households = groupHouseholds(list);
+  const links = new Map((list.households ?? []).map((item) => [item.household_id as string, item]));
   const contactsHidden = list.hidden.includes("guest_contacts");
 
   return (
@@ -227,6 +270,9 @@ export function HouseholdList({
               household={household}
               functions={list.functions}
               actorName={actorName}
+              ownerFunctions={ownerFunctions}
+              filtered={filterTitle !== null}
+              link={links.get(household.household_id) ?? null}
             />
           ))}
         </ul>
