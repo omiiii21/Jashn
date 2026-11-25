@@ -24,11 +24,13 @@ function Chip({
   ui_language,
   tone,
   onOpenDrawer,
+  className,
 }: {
   chip_key: ChipKey;
   ui_language: AppLanguage;
   tone: "reason" | "limit";
   onOpenDrawer?: () => void;
+  className?: string;
 }) {
   const label = CHIP_LABELS[chip_key];
   const text = ui_language === "hi" ? label.label_hi : label.label_en;
@@ -41,10 +43,11 @@ function Chip({
           data-chip={chip_key}
           aria-label={`${text}. ${label.explanation}`}
           className={cn(
-            "inline-flex h-7 max-w-44 shrink items-center gap-1 truncate rounded-chip border px-2 whitespace-nowrap transition-colors duration-150",
+            "inline-flex h-7 max-w-28 shrink items-center sm:max-w-44 gap-1 truncate rounded-chip border px-2 whitespace-nowrap transition-colors duration-150",
             tone === "reason"
               ? "border-current/40 text-foreground hover:bg-accent"
               : "border-transparent bg-due-tint text-due hover:bg-due-tint/90",
+            className,
           )}
           lang={ui_language === "hi" ? "hi" : undefined}
         >
@@ -108,6 +111,8 @@ export function ReasonChips({
           ui_language={ui_language}
           tone="limit"
           onOpenDrawer={flags.chip ? undefined : openDrawer}
+          // At phone width the header fits one chip: the reason chip stays, this one shows from sm up.
+          className={flags.chip ? "hidden sm:inline-flex" : undefined}
         />
       ) : null}
       {drawer ? <FlagDrawer data={drawer} open={drawerOpen} onOpenChange={setDrawerOpen} /> : null}
