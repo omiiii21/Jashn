@@ -3,7 +3,6 @@ import "server-only";
 import { RenderError, renderCardPng, renderErrorMessage } from "@/server/export/chromium";
 import { mintRenderToken } from "@/server/export/render-token";
 import { readEnvironmentFlags } from "@/server/flags";
-import { services } from "@/server/services";
 import { routes } from "@/contracts/routes";
 import type { PublicationSnapshot, WeddingId } from "@/contracts/domain";
 import type { AppendActivity, BumpVersion, SigningHelpers } from "@/contracts/services";
@@ -11,15 +10,14 @@ import type { CardPhoto } from "@/components/invite/card-model";
 
 import { selfBaseUrl } from "./base-url";
 import type { JobDeps } from "./handlers";
-import { kickRun } from "./kick";
-import type { OpsDeps } from "./ops";
-import { verifyOpsBearer } from "./ops-auth";
 import type { JobStore } from "./store";
 import { sendFirstFailureWebhook, type WebhookDeps } from "./webhook";
 import { JobRenderFailure, type WorkerDeps } from "./worker";
 
 /**
- * The single switch point from Lane D's temporary pieces to Lane A's (D58, D102): the
+ * The single switch point from Lane D's temporary pieces to Lane A's (D58, D102). It never
+ * imports `services` (that would close a cycle through the dispatcher's registry, which
+ * imports these deps); the ops routes' deps, which dispatch, live in `ops-deps.ts`. The
  * store (Lane A's schema, 14:00), the activity and version helpers, the Storage adapter
  * and the JOBS_API_TOKEN verifier (14:45). Until each lands, its placeholder refuses
  * loudly; the fixture dispatcher never reaches these handlers.
@@ -98,13 +96,4 @@ export const workerDeps: WorkerDeps<unknown> = {
   notifyFailure: async (job_id) => {
     await sendFirstFailureWebhook(webhookDeps, job_id);
   },
-};
-
-export const opsDeps: OpsDeps<unknown> = {
-  ...jobDeps,
-  verify: (authorization) => verifyOpsBearer(authorization),
-  dispatch: (actor, envelope) => services.dispatch(actor, envelope),
-  kick: (job_id) => void kickRun(job_id, { wait: false }),
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  now: () => new Date(),
 };

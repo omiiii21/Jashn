@@ -1,4 +1,5 @@
-import { jobDeps, opsDeps } from "@/server/jobs/deps";
+import { jobDeps } from "@/server/jobs/deps";
+import { opsDeps } from "@/server/jobs/ops-deps";
 import { opsGetStatus } from "@/server/jobs/ops";
 import { opsError } from "@/server/jobs/ops-http";
 
