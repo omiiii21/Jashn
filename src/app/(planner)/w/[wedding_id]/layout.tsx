@@ -77,6 +77,8 @@ export default async function WeddingShellLayout({ children, params }: WeddingSh
 
   const dates = formatDateRange(profile.first_event_date, profile.last_event_date) ?? formatDate(profile.wedding_date);
   const member_label = memberLabel(profile.member);
+  // The owner's "Team and sharing" sheet reads `team` (D99, D109); a manager gets 403, so only owners read it.
+  const team = profile.member.role === "owner" ? await readModel("team", wedding_id).catch(() => null) : null;
 
   return (
     <div className="flex min-h-full w-full min-w-0 flex-1 bg-ivory text-ink">
@@ -124,6 +126,7 @@ export default async function WeddingShellLayout({ children, params }: WeddingSh
               member_label={member_label}
               role={profile.member.role}
               dispatch={dispatchCommand}
+              team={team}
             />
             <div data-slot="voice" className={VOICE_SLOT_CLASS}>
               <VoiceDock wedding_id={wedding_id} />

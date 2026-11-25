@@ -25,7 +25,17 @@ export function FocusMain() {
   useEffect(() => {
     if (previous.current === routeKey) return;
     previous.current = routeKey;
-    document.getElementById(MAIN_ID)?.focus({ preventScroll: true });
+    const focusMain = () => document.getElementById(MAIN_ID)?.focus({ preventScroll: true });
+    focusMain();
+    // The new section can finish rendering after this effect and remove the link that had
+    // focus, which drops focus to <body>. Put it back on main if that happens soon after.
+    const timers = [120, 400, 900].map((ms) =>
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        if (!active || active === document.body) focusMain();
+      }, ms),
+    );
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [routeKey]);
 
   return null;
