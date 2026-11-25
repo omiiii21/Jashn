@@ -5,7 +5,9 @@ import { Fragment } from "react";
 import { HighlightOnce } from "@/components/planner";
 import { HIGHLIGHT_PARAM, VENDOR_ID_PARAM, parseHighlight } from "@/contracts/routes";
 
-import { getVendorLedger, readModel } from "../_lib/read";
+import { dispatchCommand } from "@/server/actions/dispatch";
+
+import { getVendorLedger, getWeddingProfile, readModel } from "../_lib/read";
 import { VendorLedgerView, VendorNotShared } from "./VendorLedgerView";
 import { VendorList } from "./VendorList";
 
@@ -55,9 +57,10 @@ export default async function VendorsPage({ params, searchParams }: VendorsPageP
 
   if (!UUID.test(vendor_id)) notFound();
 
-  const [ledger, summary] = await Promise.all([
+  const [ledger, summary, profile] = await Promise.all([
     getVendorLedger(wedding_id, vendor_id),
     readModel("money_summary", wedding_id),
+    getWeddingProfile(wedding_id),
   ]);
 
   if (ledger === "forbidden") return <VendorNotShared wedding_id={wedding_id} />;
@@ -67,7 +70,12 @@ export default async function VendorsPage({ params, searchParams }: VendorsPageP
   // never wash as if they had changed, and the next vendor's highlight runs afresh.
   return (
     <Fragment key={ledger.vendor.vendor_id}>
-      <VendorLedgerView wedding_id={wedding_id} ledger={ledger} row={row} />
+      <VendorLedgerView
+        wedding_id={wedding_id}
+        ledger={ledger}
+        row={row}
+        actions={{ role: profile.member.role, actor_name: profile.member.display_name, dispatch: dispatchCommand }}
+      />
       <HighlightOnce keys={highlight} />
     </Fragment>
   );

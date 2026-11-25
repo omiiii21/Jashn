@@ -26,7 +26,14 @@ function PhoneLabel({ children }: { children: ReactNode }) {
 
 function DueCell({ row }: { row: MoneySummaryVendorRow }) {
   if (row.overpaid_inr > 0) {
-    return <StatusLabel kind="overpaid" label={formatOverpaid(row.overpaid_inr)} field="overpaid_inr" />;
+    return (
+      <StatusLabel
+        kind="overpaid"
+        label={formatOverpaid(row.overpaid_inr)}
+        field="overpaid_inr"
+        explanation="The payments recorded are more than the contract, so nothing is owed."
+      />
+    );
   }
   const due = dueCell(row);
   if (!due) return <span className="text-ink-3">Nothing committed</span>;
@@ -54,7 +61,10 @@ function VendorRow({ wedding_id, row }: { wedding_id: WeddingId; row: MoneySumma
         >
           {row.name}
         </Link>
-        <span className="block text-meta text-ink-3">{category.en}</span>
+        <span className="block text-meta text-ink-3">
+          {category.en}
+          {row.is_one_off ? ", one-off expense" : null}
+        </span>
       </th>
       <td className={NUM_CELL}>
         <PhoneLabel>Committed</PhoneLabel>
@@ -65,7 +75,7 @@ function VendorRow({ wedding_id, row }: { wedding_id: WeddingId; row: MoneySumma
       <td className={NUM_CELL}>
         <PhoneLabel>Paid</PhoneLabel>
         <Wash watch={row.paid_inr}>
-          <Amount inr={row.paid_inr} field="paid_inr" className="text-paid" />
+          <Amount inr={row.paid_inr} field="paid_inr" className={row.paid_inr > 0 ? "text-paid" : "text-ink-3"} />
         </Wash>
       </td>
       <td className={NUM_CELL}>
@@ -106,13 +116,24 @@ function TotalCell({ label, children }: { label: string; children: ReactNode }) 
  * Still owed and the next due date, and the wedding's totals at the foot.
  */
 export function VendorList({ wedding_id, summary }: { wedding_id: WeddingId; summary: MoneySummary }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="font-serif text-title text-ink">Vendors</h1>
+      <VendorTable wedding_id={wedding_id} summary={summary} />
+    </div>
+  );
+}
+
+/**
+ * The vendor rows with their totals, or "Not shared with you" (also on the Money page, where a
+ * manager keeps the rows while the budget is hidden, AT-5.9). Every name opens its vendor page.
+ */
+export function VendorTable({ wedding_id, summary }: { wedding_id: WeddingId; summary: MoneySummary }) {
   const vendors = summary.vendors;
   const moneyHidden = summary.hidden.includes("vendor_money") || vendors === undefined;
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="font-serif text-title text-ink">Vendors</h1>
-
+    <>
       {moneyHidden ? (
         <section aria-label="Vendors" className="rounded-sheet border border-line bg-paper p-4 lg:p-6">
           <NotShared className="text-body" />
@@ -192,6 +213,6 @@ export function VendorList({ wedding_id, summary }: { wedding_id: WeddingId; sum
           </div>
         </section>
       )}
-    </div>
+    </>
   );
 }

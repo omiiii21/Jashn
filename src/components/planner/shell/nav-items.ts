@@ -48,3 +48,32 @@ export function activeSection(pathname: string | null, wedding_id: WeddingId): P
     ? (segment as PlannerSection)
     : null;
 }
+
+/**
+ * The gold nav dot (brief B3, design-direction 7.2): which section an activity topic belongs
+ * to. Money topics light both Money and Vendors.
+ */
+const TOPIC_SECTIONS: { prefixes: readonly string[]; sections: readonly NavSection[] }[] = [
+  { prefixes: ["event.", "requirement."], sections: ["events"] },
+  { prefixes: ["rsvp.", "guest.", "dietary.", "invitation"], sections: ["guests"] },
+  {
+    prefixes: ["payment.", "commitment.", "quote.", "expense.", "proposal.", "budget."],
+    sections: ["money", "vendors"],
+  },
+];
+
+export type SectionSeqs = Partial<Record<NavSection, number>>;
+
+/** The newest activity `seq` per section, from a feed in `seq`-descending order. */
+export function newestSeqBySection(entries: readonly { seq: number; topic: string }[]): SectionSeqs {
+  const latest: SectionSeqs = {};
+  for (const entry of entries) {
+    for (const group of TOPIC_SECTIONS) {
+      if (!group.prefixes.some((prefix) => entry.topic.startsWith(prefix))) continue;
+      for (const section of group.sections) {
+        if (latest[section] === undefined || entry.seq > (latest[section] ?? 0)) latest[section] = entry.seq;
+      }
+    }
+  }
+  return latest;
+}
