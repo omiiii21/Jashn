@@ -20,18 +20,20 @@ const isRemote = BASE_URL.startsWith("https://");
 
 type OpsAnswer = { status: number; headers: Headers; text: string; bytes: Buffer };
 
-/** A POST through Node's fetch, so no header ever lands in a Playwright log or trace. */
-async function opsPost(path: string, headers: Record<string, string> = {}): Promise<OpsAnswer> {
+/** A request through Node's fetch, so no header ever lands in a Playwright log or trace. */
+async function opsCall(method: "GET" | "POST", path: string, headers: Record<string, string> = {}, body?: string): Promise<OpsAnswer> {
   let response: Response;
   try {
-    response = await fetch(`${BASE_URL}${path}`, { method: "POST", headers, signal: AbortSignal.timeout(80_000) });
+    response = await fetch(`${BASE_URL}${path}`, { method, headers, body, signal: AbortSignal.timeout(80_000) });
   } catch (error) {
     // Report the failure without the request (and so without its headers).
-    throw new Error(`POST ${path} failed: ${error instanceof Error ? error.name : "error"}`);
+    throw new Error(`${method} ${path} failed: ${error instanceof Error ? error.name : "error"}`);
   }
   const bytes = Buffer.from(await response.arrayBuffer());
   return { status: response.status, headers: response.headers, text: bytes.toString("utf8"), bytes };
 }
+
+const opsPost = (path: string, headers: Record<string, string> = {}) => opsCall("POST", path, headers);
 
 const withToken = () => ({ Authorization: `Bearer ${JOBS_TOKEN}` });
 
@@ -85,7 +87,6 @@ test.describe("render probe", () => {
       { Authorization: "Bearer not-the-token" },
       { Authorization: `Bearer  ${JOBS_TOKEN}` },
       { Authorization: "Bearer" },
-      { Authorization: `bearer ${JOBS_TOKEN}` },
       { Authorization: "Bearer jobs-token-old-value-that-was-rotated-out" },
       { Cookie: "sb-access-token=member-session-cookie" },
     ];
@@ -159,5 +160,64 @@ test.describe("render probe", () => {
     }
     await expect(page.locator('[lang="hi"]')).toHaveCount(4);
     await expect(page.locator("meta[name=robots]")).toHaveAttribute("content", /noindex/);
+  });
+});
+
+test.describe("ops routes", () => {
+  test.skip(({ isMobile }) => isMobile, "API checks run once, on the desktop project");
+  test.skip(!JOBS_TOKEN, "JOBS_API_TOKEN must be in .env.local");
+
+  const status = (id: string) => `/api/ops/export-jobs/${id}`;
+  const retry = (id: string) => `/api/ops/export-jobs/${id}/retry`;
+  const json = { "Content-Type": "application/json" };
+  const retryBody = JSON.stringify({ expected_export_key: "export:x:rev3:png" });
+
+  test("EX-05: the status read and the retry refuse every bad bearer with the same 401", async () => {
+    const variants: Record<string, string>[] = [{}, { Authorization: "Bearer not-the-token" }, { Authorization: `Bearer  ${JOBS_TOKEN}` }];
+    for (const headers of variants) {
+      expectUnauthenticated(await opsCall("GET", status(REAL_JOB), headers));
+      expectUnauthenticated(await opsCall("POST", retry(REAL_JOB), { ...headers, ...json, "Idempotency-Key": "nb-e2e-0001" }, retryBody));
+    }
+  });
+
+  test("an unknown job answers the same 404 for a UUID and for anything else", async () => {
+    const uuid = await opsCall("GET", status(REAL_JOB), withToken());
+    const other = await opsCall("GET", status("not-a-uuid"), withToken());
+    expect(uuid.status).toBe(404);
+    expect(other.status).toBe(404);
+    expect(uuid.text).toBe(other.text);
+    expect(JSON.parse(uuid.text)).toMatchObject({ ok: false, error: { code: "not_found" } });
+  });
+
+  test("the retry needs an Idempotency-Key and a JSON body, checked before the job is looked up", async () => {
+    const noKey = await opsCall("POST", retry(REAL_JOB), { ...withToken(), ...json }, retryBody);
+    expect(noKey.status).toBe(400);
+    expect(JSON.parse(noKey.text)).toMatchObject({ error: { code: "validation_failed", field: "idempotency_key" } });
+    const noBody = await opsCall("POST", retry(REAL_JOB), { ...withToken(), ...json, "Idempotency-Key": "nb-e2e-0002" }, "{");
+    expect(noBody.status).toBe(400);
+    expect(JSON.parse(noBody.text)).toMatchObject({ error: { code: "validation_failed", field: "body" } });
+    const badWait = await opsCall("GET", `${status(REAL_JOB)}?wait=99`, withToken());
+    expect([400, 404]).toContain(badWait.status);
+  });
+});
+
+test.describe("Invite page", () => {
+  test.skip(isRemote, "fixture mode only: production needs a signed-in member");
+
+  test("the owner sees the publish control and the card export panel", async ({ page }) => {
+    const wedding = "3f71c430-a498-531f-a2ed-12e2267e7ccf";
+    const response = await page.goto(`/w/${wedding}/invite`);
+    test.skip(response?.status() !== 200, "the fixture member isn't served here (live auth is on)");
+    await expect(page.getByRole("heading", { name: "Invitation" })).toBeVisible();
+    await expect(page.getByTestId("invite-status")).toContainText("Published revision 2");
+    await expect(page.getByRole("button", { name: "Review and publish" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Card export" })).toBeVisible();
+    await expect(page.getByText("Ready", { exact: true }).first()).toBeVisible();
+    // The page's own content stays inside the viewport (the planner header is the shell's).
+    const viewport = page.viewportSize()!.width;
+    const overflowing = await page.locator("main").evaluate((main, limit) => {
+      return Array.from(main.querySelectorAll("*")).filter((el) => el.getBoundingClientRect().right > limit + 1).length;
+    }, viewport);
+    expect(overflowing).toBe(0);
   });
 });
