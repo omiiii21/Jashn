@@ -9,9 +9,11 @@ import { GUEST_COPY } from "./guest-copy";
 import {
   answerKey,
   buildRsvpBody,
+  editedNotes,
   effectiveAnswer,
   isFullyAnswered,
   keyForBody,
+  normaliseNote,
   pruneSelection,
   storedAnswers,
   type HeldKey,
@@ -74,11 +76,6 @@ async function postJson(url: string, payload: GuestRsvpPayload | GuestDietaryPay
   return "network";
 }
 
-function noteOf(value: string | null | undefined): string | null {
-  const trimmed = (value ?? "").trim();
-  return trimmed === "" ? null : trimmed;
-}
-
 function notesFrom(guests: readonly ReplyGuest[]): Record<string, string | null> {
   return Object.fromEntries(guests.map((guest) => [guest.guest_id, guest.dietary_note]));
 }
@@ -91,20 +88,22 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
   const router = useRouter();
   const hiLang = lang === "hi" ? undefined : "hi";
 
-  // The baseline is the view's stored answers. A reply's result replaces it until the
-  // next refresh brings new props (router.refresh keeps this state).
+  // The baseline is the view's stored answers and notes. A reply's result replaces it until
+  // the next refresh brings new props (router.refresh keeps this state).
   const propsAnswers = storedAnswers({ functions: inserts });
-  const propsSignature = JSON.stringify(propsAnswers);
+  const propsNotes = notesFrom(guests);
+  const propsSignature = JSON.stringify([propsAnswers, propsNotes]);
   const [latest, setLatest] = useState<{ basis: string; answers: StoredAnswer[]; notes: Record<string, string | null> } | null>(null);
   const fresh = latest && latest.basis === propsSignature ? latest : null;
   const baseline = fresh ? fresh.answers : propsAnswers;
-  const baselineNotes = fresh ? fresh.notes : notesFrom(guests);
+  const baselineNotes = fresh ? fresh.notes : propsNotes;
 
   const [rawSelection, setSelection] = useState<Selection>({});
   const selection = pruneSelection(baseline, rawSelection);
-  const [notes, setNotes] = useState<Record<string, string>>(() =>
-    Object.fromEntries(guests.map((guest) => [guest.guest_id, guest.dietary_note ?? ""])),
-  );
+  // Only what the guest typed. An untouched field shows the stored note, so a refresh that
+  // brings a newer note (a planner's edit) never leaves a stale copy to be sent back over it.
+  const [noteEdits, setNoteEdits] = useState<Record<string, string>>({});
+  const noteText = (guest_id: string): string => noteEdits[guest_id] ?? baselineNotes[guest_id] ?? "";
   const [done, setDone] = useState(() => isFullyAnswered({ functions: inserts }));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,10 +129,10 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
   }
 
   function appendChip(guest_id: string, word: string) {
-    const current = notes[guest_id] ?? "";
+    const current = noteText(guest_id);
     if (current.toLocaleLowerCase().includes(word.toLocaleLowerCase())) return;
     const next = current.trim() === "" ? word : `${current.trim().replace(/[,.;]$/, "")}, ${word}`;
-    setNotes({ ...notes, [guest_id]: next.slice(0, 200) });
+    setNoteEdits({ ...noteEdits, [guest_id]: next.slice(0, 200) });
   }
 
   function failureMessage(result: PostResult): string {
@@ -146,7 +145,11 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
   async function send() {
     setError(null);
     const body = buildRsvpBody(baseline, selection);
-    const changedNotes = guests.filter((guest) => noteOf(notes[guest.guest_id]) !== noteOf(baselineNotes[guest.guest_id]));
+    const changedNotes = editedNotes(
+      guests.map((guest) => guest.guest_id),
+      noteEdits,
+      baselineNotes,
+    );
     if (body.responses.length === 0 && changedNotes.length === 0) {
       setError(copy.error_nothing_chosen);
       return;
@@ -174,14 +177,13 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
         }
       }
       if (ok) {
-        for (const guest of changedNotes) {
-          const payload = { guest_id: guest.guest_id, dietary_note: noteOf(notes[guest.guest_id]) };
-          const held = keyForBody(dietaryKeys.current[guest.guest_id] ?? null, payload, responseSeq);
-          dietaryKeys.current[guest.guest_id] = held;
+        for (const payload of changedNotes) {
+          const held = keyForBody(dietaryKeys.current[payload.guest_id] ?? null, payload, responseSeq);
+          dietaryKeys.current[payload.guest_id] = held;
           const result = await postJson(routes.api.guestDietary(token), { idempotency_key: held.key, ...payload });
           if (result !== "network") answered = true;
           if (result !== "network" && result.body?.ok) {
-            savedNotes = { ...savedNotes, [guest.guest_id]: payload.dietary_note };
+            savedNotes = { ...savedNotes, [payload.guest_id]: payload.dietary_note };
           } else {
             ok = false;
             setError(failureMessage(result));
@@ -194,6 +196,14 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
       if (answered) setResponseSeq((seq) => seq + 1);
     }
     setLatest({ basis: propsSignature, answers, notes: savedNotes });
+    // A saved note now lives in the baseline; drop the edit unless the guest kept typing.
+    setNoteEdits((current) => {
+      const next = { ...current };
+      for (const [guest_id, value] of Object.entries(current)) {
+        if (normaliseNote(value) === normaliseNote(savedNotes[guest_id])) delete next[guest_id];
+      }
+      return next;
+    });
     if (ok) {
       setDone(true);
       router.refresh();
@@ -346,12 +356,12 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
               <textarea
                 id={fieldId}
                 aria-label={manyGuests ? copy.food_for(guest.full_name) : copy.food_heading}
-                value={notes[guest.guest_id] ?? ""}
+                value={noteText(guest.guest_id)}
                 disabled={done}
                 maxLength={200}
                 rows={2}
                 placeholder={copy.food_placeholder}
-                onChange={(event) => setNotes({ ...notes, [guest.guest_id]: event.target.value })}
+                onChange={(event) => setNoteEdits({ ...noteEdits, [guest.guest_id]: event.target.value })}
                 className="mt-3 block w-full rounded-control border border-line-strong bg-paper px-3 py-2 text-body text-ink placeholder:text-ink-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-maroon disabled:opacity-70"
               />
             </div>

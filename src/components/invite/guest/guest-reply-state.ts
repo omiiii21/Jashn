@@ -92,6 +92,27 @@ export function pruneSelection(stored: readonly StoredAnswer[], selection: Selec
   return kept;
 }
 
+/** A dietary note as the server stores it: trimmed, and null when empty (`text(200)` rejects ""). */
+export function normaliseNote(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+/**
+ * The dietary requests to send: only fields the guest edited, and only where the edit
+ * differs from the stored note. An untouched field sends nothing, so a stored note that
+ * changed since the page loaded (a planner's edit) is never overwritten by a stale copy.
+ */
+export function editedNotes(
+  guest_ids: readonly string[],
+  edits: Readonly<Record<string, string>>,
+  stored: Readonly<Record<string, string | null>>,
+): { guest_id: string; dietary_note: string | null }[] {
+  return guest_ids
+    .filter((guest_id) => edits[guest_id] !== undefined && normaliseNote(edits[guest_id]) !== normaliseNote(stored[guest_id]))
+    .map((guest_id) => ({ guest_id, dietary_note: normaliseNote(edits[guest_id]) }));
+}
+
 function hex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

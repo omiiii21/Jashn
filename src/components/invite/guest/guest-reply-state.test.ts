@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   answerKey,
   buildRsvpBody,
+  editedNotes,
   isFullyAnswered,
   keyForBody,
   newIdempotencyKey,
+  normaliseNote,
   pruneSelection,
   storedAnswers,
   type StoredAnswer,
@@ -62,6 +64,26 @@ describe("isFullyAnswered", () => {
     expect(isFullyAnswered(view)).toBe(false);
     expect(isFullyAnswered({ functions: [view.functions[0]] })).toBe(true);
     expect(isFullyAnswered({ functions: [] })).toBe(false);
+  });
+});
+
+describe("editedNotes (AT-4.9)", () => {
+  it("sends only fields the guest edited, never a stale copy over a newer stored note", () => {
+    // A planner set "Jain" after the page loaded; the guest never touched the field.
+    expect(editedNotes([TARA], {}, { [TARA]: "Jain" })).toEqual([]);
+  });
+
+  it("sends an edit that differs, trimmed, and null for an emptied field", () => {
+    expect(editedNotes([TARA], { [TARA]: "  Mushroom allergy " }, { [TARA]: null })).toEqual([
+      { guest_id: TARA, dietary_note: "Mushroom allergy" },
+    ]);
+    expect(editedNotes([TARA], { [TARA]: "   " }, { [TARA]: "Jain" })).toEqual([{ guest_id: TARA, dietary_note: null }]);
+  });
+
+  it("sends nothing when the edit matches the stored note", () => {
+    expect(editedNotes([TARA], { [TARA]: "Jain " }, { [TARA]: "Jain" })).toEqual([]);
+    expect(editedNotes([TARA], { [TARA]: "" }, { [TARA]: null })).toEqual([]);
+    expect(normaliseNote("  ")).toBeNull();
   });
 });
 
