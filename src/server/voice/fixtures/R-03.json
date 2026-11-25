@@ -1,0 +1,35 @@
+{
+ "row_id": "R-03",
+ "start_state": "D4 with voice_writes_enabled off",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Reception में बारह लोगों के लिए Jain खाना add करो",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "hinglish",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "add_requirement",
+    "event_id": "EVT-REC",
+    "text": "Jain food",
+    "quantity": 12,
+    "requirement_category": "catering",
+    "heard": [
+     {
+      "field": "quantity",
+      "phrase": "बारह"
+     },
+     {
+      "field": "text",
+      "phrase": "Jain खाना"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}
