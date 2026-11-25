@@ -70,8 +70,9 @@ export const COMMAND_NAMES = [
   "correct_payment",
   "void_payment",
   "record_expense",
-  // 3.4 Requirements, guests and RSVPs
+  // 3.4 Requirements, notes, guests and RSVPs
   "add_requirement",
+  "add_note",
   "add_guest",
   "set_invitations",
   "set_rsvp",
@@ -118,6 +119,7 @@ export const VOICE_COMMANDS = [
   "record_payment",
   "correct_payment",
   "add_requirement",
+  "add_note",
   "add_guest",
   "set_rsvp",
   "set_dietary",
@@ -181,6 +183,7 @@ export const ACTIVITY_TOPICS = [
   "payment.voided",
   "expense.recorded",
   "requirement.added",
+  "note.added",
   "guest.added",
   "invitations.set",
   "rsvp.updated",
@@ -591,6 +594,11 @@ export const commandSchemas = {
     quantity: intIn(1, 10000).optional(),
     requirement_category: z.enum(REQUIREMENT_CATEGORIES, "unknown_value").optional(),
     vendor_id: id().optional(),
+  }),
+  // A fact the planner told the assistant that no other record holds ("Valet parking for 100 cars").
+  add_note: z.object({
+    topic: text(40),
+    note_text: text(300),
   }),
   add_guest: z.object({
     full_name: text(80),
