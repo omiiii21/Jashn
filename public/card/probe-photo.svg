@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1000" viewBox="0 0 1500 1000">
+  <title>Placeholder for the couple photo</title>
+  <rect width="1500" height="1000" fill="#EEE2CB"/>
+  <rect x="60" y="60" width="1380" height="880" fill="none" stroke="#8E7B6E" stroke-width="3"/>
+  <text x="750" y="480" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="64" fill="#54443E">Couple photo</text>
+  <text x="750" y="570" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="40" fill="#6E5D55">Placeholder for the render probe</text>
+</svg>
