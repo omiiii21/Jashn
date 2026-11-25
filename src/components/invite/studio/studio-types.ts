@@ -22,6 +22,8 @@ export type InviteStudioDraft = {
   events: SnapshotEvent[];
   /** The draft style's photo, or null when `photo_asset_id` is null. */
   photo: StudioPhoto | null;
+  /** Every couple photo of this wedding, oldest first, for the photo picker (signed thumbnails). */
+  photos: StudioPhoto[];
   is_sample: boolean;
   /** The signed-in member: managers edit the draft too; only owners publish. */
   member: { display_name: string; role: MemberRole };

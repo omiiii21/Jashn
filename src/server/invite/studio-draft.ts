@@ -1,10 +1,15 @@
 import "server-only";
 
+import { and, asc, eq } from "drizzle-orm";
+
 import { CommandFailure } from "@/contracts/commands";
-import { DEFAULT_HEADING_HI, type AssetDto, type InviteStyleDto, type SessionActor, type WeddingId } from "@/contracts/domain";
+import { DEFAULT_HEADING_HI, type AssetDto, type AssetId, type InviteStyleDto, type SeedKey, type SessionActor, type WeddingId } from "@/contracts/domain";
 import { getDemoFixture } from "@/contracts/fixtures";
-import { fixtureServices } from "@/contracts/services";
+import { getDb } from "@/db/client";
 import { SAMPLE_COPIES, seededId } from "@/db/ids";
+import { assets, inviteStyles } from "@/db/schema";
+import { isLiveAuth } from "@/server/auth/session";
+import { signingHelpers } from "@/server/storage";
 import { toSnapshotEvent } from "@/components/invite/studio/draft-card";
 import type { InviteStudioDraft, StudioPhoto, StudioStyle } from "@/components/invite/studio/studio-types";
 import { services } from "@/server/services";
@@ -25,7 +30,7 @@ export async function getInviteStudioDraft(actor: SessionActor, wedding_id: Wedd
     services.read("wedding_profile", { actor, wedding_id }),
     services.read("itinerary", { actor, wedding_id }),
   ]);
-  const { style, photo } = await readDraftStyle(wedding_id);
+  const { style, photo, photos } = await readDraftStyle(wedding_id);
 
   return {
     wedding_id,
@@ -38,6 +43,7 @@ export async function getInviteStudioDraft(actor: SessionActor, wedding_id: Wedd
     style,
     events: itinerary.functions.map(toSnapshotEvent),
     photo,
+    photos,
     is_sample: profile.is_sample,
     member: { display_name: profile.member.display_name, role: profile.member.role },
   };
@@ -81,25 +87,59 @@ function fixtureCopyOf(wedding_id: WeddingId) {
   return SAMPLE_COPIES.find((copy) => seededId(copy, "weddings", "WEDDING") === wedding_id) ?? null;
 }
 
-async function readDraftStyle(wedding_id: WeddingId): Promise<{ style: StudioStyle; photo: StudioPhoto | null }> {
+type DraftStyleRead = { style: StudioStyle; photo: StudioPhoto | null; photos: StudioPhoto[] };
+
+const signMember = (asset: AssetDto) => signingHelpers.couplePhotoUrl(asset, "member").catch(() => null);
+
+/** Every couple photo, signed for a member; a row with no file yet has no URL (D126). */
+async function signAll(rows: readonly AssetDto[], sign: (asset: AssetDto) => Promise<string | null>): Promise<StudioPhoto[]> {
+  const couple = rows.filter((row) => row.asset_kind === "couple_photo");
+  return Promise.all(couple.map(async (asset) => ({ asset_id: asset.asset_id, url: asset.bytes === null ? null : await sign(asset) })));
+}
+
+async function readDraftStyle(wedding_id: WeddingId): Promise<DraftStyleRead> {
+  if (isLiveAuth()) return readLiveDraftStyle(wedding_id);
+
   const copy = fixtureCopyOf(wedding_id);
+  if (!copy) throw new CommandFailure({ code: "not_found", message: "Wedding not found." });
+  const fixture = getDemoFixture(copy);
+  const style = withoutSeedKey(fixture.invite_style);
+  // Fixtures sign nothing, so a photo shows only once uploaded in this tab.
+  const unsigned = async () => null;
+  return { style, photo: await photoFor(style, fixture.assets, unsigned), photos: await signAll(fixture.assets, unsigned) };
+}
 
-  if (services === fixtureServices) {
-    if (!copy) throw new CommandFailure({ code: "not_found", message: "Wedding not found." });
-    const fixture = getDemoFixture(copy);
-    const style = withoutSeedKey(fixture.invite_style);
-    // Fixtures sign nothing, so the photo shows only once uploaded in this tab.
-    return { style, photo: await photoFor(style, fixture.assets, async () => null) };
-  }
-
-  // TODO(lane-a-schema): once src/db/schema.ts merges, read this wedding's `invite_styles`
-  // row and its `assets` (core query builder, explicit where on wedding_id; AGENTS.md
-  // rule 7), and sign the photo with Lane A's `couplePhotoUrl(asset, "member")` (10 minutes).
-  // Until then the real services show the seeded copy's D0 style, or the column defaults.
-  if (copy) {
-    const fixture = getDemoFixture(copy);
-    const style = withoutSeedKey(fixture.invite_style);
-    return { style, photo: await photoFor(style, fixture.assets, async () => null) };
-  }
-  return { style: defaultStyle(), photo: null };
+/** Lane A's tables: the wedding's `invite_styles` row and its couple photos (rule 2). */
+async function readLiveDraftStyle(wedding_id: WeddingId): Promise<DraftStyleRead> {
+  const db = getDb();
+  const [row] = await db.select().from(inviteStyles).where(eq(inviteStyles.wedding_id, wedding_id));
+  const assetRows = await db
+    .select()
+    .from(assets)
+    .where(and(eq(assets.wedding_id, wedding_id), eq(assets.asset_kind, "couple_photo")))
+    .orderBy(asc(assets.created_at), asc(assets.id));
+  const dtos: AssetDto[] = assetRows.map((asset) => ({
+    asset_id: asset.id as AssetId,
+    seed_key: asset.seed_key as SeedKey | null,
+    asset_kind: asset.asset_kind,
+    storage_path: asset.storage_path,
+    mime_type: asset.mime_type,
+    bytes: asset.bytes,
+    width: asset.width,
+    height: asset.height,
+  }));
+  const style: StudioStyle = row
+    ? {
+        theme: row.theme,
+        typeface: row.typeface,
+        layout: row.layout,
+        photo_frame: row.photo_frame,
+        photo_asset_id: row.photo_asset_id as AssetId | null,
+        heading_hi: row.heading_hi,
+        wording_en: row.wording_en,
+        wording_hi: row.wording_hi,
+        blessing_line: row.blessing_line,
+      }
+    : defaultStyle();
+  return { style, photo: await photoFor(style, dtos, signMember), photos: await signAll(dtos, signMember) };
 }
