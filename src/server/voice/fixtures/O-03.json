@@ -1,0 +1,28 @@
+{
+ "row_id": "O-03",
+ "start_state": "D4",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Reception का venue क्या है, और caterer का कितना बाकी है?",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "ask",
+  "reply_language": "hinglish",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "query_event",
+    "event_id": "EVT-REC",
+    "detail": "venue"
+   },
+   {
+    "kind": "query_balance",
+    "scope": "vendor",
+    "vendor_id": "VEN-CAT"
+   }
+  ]
+ },
+ "audio_text": null
+}

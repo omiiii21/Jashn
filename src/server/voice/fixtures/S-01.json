@@ -1,0 +1,43 @@
+{
+ "row_id": "S-01",
+ "start_state": "T0",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Our wedding is on 14 December in Bengaluru. Budget is twelve lakh, roughly 250 guests.",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "en",
+  "missing_fields": [
+   "year",
+   "bride_name",
+   "groom_name"
+  ],
+  "reply": "Which year is it, and what are the couple's names?",
+  "actions": [
+   {
+    "kind": "set_wedding_profile",
+    "date_text": "14 December",
+    "city": "Bengaluru",
+    "budget_inr": 1200000,
+    "expected_guests": 250,
+    "heard": [
+     {
+      "field": "date_text",
+      "phrase": "14 December"
+     },
+     {
+      "field": "budget_inr",
+      "phrase": "twelve lakh"
+     },
+     {
+      "field": "expected_guests",
+      "phrase": "roughly 250 guests"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}
