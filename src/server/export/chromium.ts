@@ -77,6 +77,8 @@ export type RenderCardOptions = {
 /** Navigation (guard step 1) and the font steps (2 and 3) each get this budget. */
 const NAVIGATION_BUDGET_MS = 20_000;
 const FONTS_BUDGET_MS = 8_000;
+/** Bounds every DevTools call, so a stuck page can't hold the render slot for puppeteer's default 180 s. */
+const PROTOCOL_TIMEOUT_MS = 30_000;
 
 let browserPromise: Promise<Browser> | null = null;
 let slot: Promise<void> = Promise.resolve();
@@ -108,6 +110,7 @@ async function launchBrowser(): Promise<Browser> {
       executablePath: localChrome,
       headless: true,
       args: ["--no-first-run", "--no-default-browser-check", "--hide-scrollbars", "--disable-extensions"],
+      protocolTimeout: PROTOCOL_TIMEOUT_MS,
       defaultViewport: { width: CARD_WIDTH_PX, height: CARD_HEIGHT_PX, deviceScaleFactor: 1 },
     });
   }
@@ -117,6 +120,7 @@ async function launchBrowser(): Promise<Browser> {
     args: await puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
     executablePath: await chromium.executablePath(),
     headless: "shell",
+    protocolTimeout: PROTOCOL_TIMEOUT_MS,
     defaultViewport: { width: CARD_WIDTH_PX, height: CARD_HEIGHT_PX, deviceScaleFactor: 1 },
   });
 }
@@ -196,9 +200,9 @@ export async function renderCardPng(options: RenderCardOptions): Promise<{ png: 
       timings.launch_ms = Date.now() - launchStarted;
 
       page = await capped(browser.newPage(), deadline, timeoutError);
-      await page.setViewport({ width: CARD_WIDTH_PX, height: CARD_HEIGHT_PX, deviceScaleFactor: 1 });
+      await capped(page.setViewport({ width: CARD_WIDTH_PX, height: CARD_HEIGHT_PX, deviceScaleFactor: 1 }), deadline, timeoutError);
       if (options.test_mode === "block_fonts") {
-        await page.setRequestInterception(true);
+        await capped(page.setRequestInterception(true), deadline, timeoutError);
         page.on("request", (request: HTTPRequest) => {
           if (request.resourceType() === "font") void request.abort("blockedbyclient");
           else void request.continue();

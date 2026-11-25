@@ -39,7 +39,11 @@ async (budgetMs) => {
   const missing = new Set();
   const checked = Array.from(document.querySelectorAll("[data-font-check]"));
   for (const el of checked) {
-    const text = (el.textContent || "").trim();
+    const isHindi = el.getAttribute("lang") === "hi";
+    // For Hindi, only the Devanagari code points: a space or punctuation would let the
+    // Latin face satisfy the check while the Devanagari face is missing (the local trap).
+    const raw = (el.textContent || "").trim();
+    const text = isHindi ? Array.from(raw).filter((ch) => /[\u0900-\u097F\u1CD0-\u1CFF\uA8E0-\uA8FF]/.test(ch)).join("") : raw;
     if (!text) continue;
     const cs = getComputedStyle(el);
     // Only the element's primary family, the web face. next/font's fallback faces use
@@ -58,7 +62,7 @@ async (budgetMs) => {
       }
     }
     const web = faces.filter((face) => face.status === "loaded" && !isFallback(face.family));
-    if (web.length === 0) missing.add(primary + (el.getAttribute("lang") === "hi" ? " (Devanagari)" : ""));
+    if (web.length === 0) missing.add(primary + (isHindi ? " (Devanagari)" : ""));
   }
   const fonts_ms = Math.round(performance.now() - started);
   if (missing.size > 0) {
