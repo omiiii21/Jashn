@@ -86,6 +86,7 @@ beforeEach(() => {
   vi.stubEnv("FLAGSMITH_ID_SALT", "");
   vi.stubEnv("INTERNAL_USER_EMAILS", "");
   vi.stubEnv("NEXT_PUBLIC_FLAGSMITH_ENVIRONMENT_ID", "");
+  vi.stubEnv("DATABASE_URL", "");
   sdkHolder.sdk = null;
   setFlagsmithClientFactoryForTests(null);
   resetFlagsmithClientForTests();
