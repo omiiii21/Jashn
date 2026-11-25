@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FLAG_FALLBACKS, type EnvironmentFlags } from "@/contracts/flags";
-import { readImageInfo } from "./image-size";
+import { orientedSize, readImageInfo } from "./image-size";
 import { headingLineFor, OG_HEADING_HI_TEXT, OG_WORDING_HI_TEXT, wordingLineFor } from "./og-hindi-lines";
 import { fitLabel, fitSequence, isLatinText, latinOrNull, lineCount, photoDisplaySize } from "./og-layout";
 import { readCardRenderer } from "./renderer-choice";
@@ -15,6 +15,16 @@ describe("og layout helpers", () => {
     expect(latinOrNull("शुभ विवाह")).toBeNull();
     expect(latinOrNull("")).toBeNull();
     expect(latinOrNull(null)).toBeNull();
+  });
+
+  it("refuses Latin letters and punctuation the committed faces don't have", () => {
+    // Each of these made next/og fetch a Google font at render time, or drop the letter.
+    expect(isLatinText("Shāntiniketan Hall")).toBe(true);
+    expect(isLatinText("Ĉiro & Ŧara")).toBe(false);
+    expect(isLatinText("Ħall")).toBe(false);
+    expect(isLatinText("well\u2010known")).toBe(false);
+    expect(isLatinText("Lotus Hall \u{1F338}")).toBe(false);
+    expect(latinOrNull("Ŧara")).toBeNull();
   });
 
   it("wraps long lines and keeps short ones on one line", () => {
@@ -91,26 +101,48 @@ describe("readImageInfo", () => {
     png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
     new DataView(png.buffer).setUint32(16, 1500);
     new DataView(png.buffer).setUint32(20, 1000);
-    expect(readImageInfo(png)).toEqual({ kind: "png", mime: "image/png", width: 1500, height: 1000 });
+    expect(readImageInfo(png)).toEqual({ kind: "png", mime: "image/png", width: 1500, height: 1000, orientation: 1 });
 
     // SOI, an APP0 segment of 16 bytes, then SOF0 with height 1000 and width 1500.
     const jpeg = new Uint8Array([
       0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, ...new Array(14).fill(0), 0xff, 0xc0, 0x00, 0x11, 0x08, 0x03, 0xe8, 0x05, 0xdc, 0x03,
       ...new Array(9).fill(0),
     ]);
-    expect(readImageInfo(jpeg)).toEqual({ kind: "jpeg", mime: "image/jpeg", width: 1500, height: 1000 });
+    expect(readImageInfo(jpeg)).toEqual({ kind: "jpeg", mime: "image/jpeg", width: 1500, height: 1000, orientation: 1 });
 
     // RIFF....WEBPVP8X, then 24-bit width-1 and height-1 at offsets 24 and 27.
     const webp = new Uint8Array(30);
     webp.set([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58]);
     webp.set([0xdb, 0x05, 0x00, 0xe7, 0x03, 0x00], 24);
-    expect(readImageInfo(webp)).toEqual({ kind: "webp", mime: "image/webp", width: 1500, height: 1000 });
+    expect(readImageInfo(webp)).toEqual({ kind: "webp", mime: "image/webp", width: 1500, height: 1000, orientation: 1 });
 
     const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1000"></svg>');
-    expect(readImageInfo(svg)).toEqual({ kind: "svg", mime: "image/svg+xml", width: 1500, height: 1000 });
+    expect(readImageInfo(svg)).toEqual({ kind: "svg", mime: "image/svg+xml", width: 1500, height: 1000, orientation: 1 });
 
     expect(readImageInfo(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0]))).toBeNull();
     expect(readImageInfo(new Uint8Array([]))).toBeNull();
+  });
+
+  it("reads a JPEG's EXIF orientation, in either byte order", () => {
+    // SOI, APP1 "Exif\0\0" with a TIFF header and one IFD0 entry (0x0112 = 6), then SOF0.
+    const jpegWith = (little: boolean, orientation: number) => {
+      const u16 = (n: number) => (little ? [n & 0xff, n >> 8] : [n >> 8, n & 0xff]);
+      const u32 = (n: number) => (little ? [n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, n >>> 24] : [n >>> 24, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]);
+      const tiff = [...(little ? [0x49, 0x49] : [0x4d, 0x4d]), ...u16(42), ...u32(8), ...u16(1), ...u16(0x0112), ...u16(3), ...u32(1), ...u16(orientation), 0, 0, ...u32(0)];
+      const app1 = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
+      return new Uint8Array([
+        0xff, 0xd8, 0xff, 0xe1, (app1.length + 2) >> 8, (app1.length + 2) & 0xff, ...app1,
+        0xff, 0xc0, 0x00, 0x11, 0x08, 0x03, 0xe8, 0x05, 0xdc, 0x03, ...new Array(9).fill(0),
+      ]);
+    };
+    expect(readImageInfo(jpegWith(true, 6))).toEqual({ kind: "jpeg", mime: "image/jpeg", width: 1500, height: 1000, orientation: 6 });
+    expect(readImageInfo(jpegWith(false, 8))?.orientation).toBe(8);
+    expect(readImageInfo(jpegWith(true, 3))?.orientation).toBe(3);
+    expect(readImageInfo(jpegWith(true, 0))?.orientation).toBe(1);
+    expect(readImageInfo(jpegWith(true, 42))?.orientation).toBe(1);
+
+    expect(orientedSize({ width: 1500, height: 1000, orientation: 6 })).toEqual({ width: 1000, height: 1500 });
+    expect(orientedSize({ width: 1500, height: 1000, orientation: 3 })).toEqual({ width: 1500, height: 1000 });
   });
 });
 

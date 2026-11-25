@@ -5,10 +5,22 @@ import "server-only";
  * (export-and-recovery 3.7: the photo is fetched on the server and embedded). The studio
  * accepts JPEG, PNG and WEBP, never a GIF (topic 7); SVG is here for the probe's placeholder.
  * Returns null for anything else or a header it can't read.
+ *
+ * A JPEG's EXIF orientation is read too: Chromium shows the photo turned the way the
+ * camera meant it, while next/og draws the stored pixels as they are, so the og card
+ * turns the photo itself (og-renderer.tsx).
  */
 
 export type ImageKind = "png" | "jpeg" | "webp" | "svg";
-export type ImageInfo = { kind: ImageKind; mime: string; width: number; height: number };
+export type ImageInfo = {
+  kind: ImageKind;
+  mime: string;
+  /** The stored pixel size, before any EXIF orientation. */
+  width: number;
+  height: number;
+  /** The EXIF orientation, 1 to 8; 1 (as stored) when there is none. */
+  orientation: number;
+};
 
 const MIME: Record<ImageKind, string> = {
   png: "image/png",
@@ -17,9 +29,39 @@ const MIME: Record<ImageKind, string> = {
   svg: "image/svg+xml",
 };
 
-function info(kind: ImageKind, width: number, height: number): ImageInfo | null {
+function info(kind: ImageKind, width: number, height: number, orientation = 1): ImageInfo | null {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
-  return { kind, mime: MIME[kind], width, height };
+  return { kind, mime: MIME[kind], width, height, orientation };
+}
+
+/** The size the photo shows at once its EXIF orientation is applied: 5 to 8 turn it a quarter. */
+export function orientedSize(image: Pick<ImageInfo, "width" | "height" | "orientation">): { width: number; height: number } {
+  return image.orientation >= 5 && image.orientation <= 8
+    ? { width: image.height, height: image.width }
+    : { width: image.width, height: image.height };
+}
+
+/** The orientation tag (0x0112) from an APP1 Exif segment's IFD0, or 1. */
+function exifOrientation(view: DataView, start: number, end: number): number {
+  // "Exif\0\0", then the TIFF header: byte order, 42, and the IFD0 offset.
+  if (end - start < 14 || view.getUint32(start) !== 0x45786966 || view.getUint16(start + 4) !== 0) return 1;
+  const tiff = start + 6;
+  const order = view.getUint16(tiff);
+  if (order !== 0x4949 && order !== 0x4d4d) return 1;
+  const little = order === 0x4949;
+  if (view.getUint16(tiff + 2, little) !== 42) return 1;
+  const ifd = tiff + view.getUint32(tiff + 4, little);
+  if (ifd + 2 > end) return 1;
+  const count = view.getUint16(ifd, little);
+  for (let index = 0; index < count; index += 1) {
+    const entry = ifd + 2 + index * 12;
+    if (entry + 12 > end) return 1;
+    if (view.getUint16(entry, little) === 0x0112) {
+      const value = view.getUint16(entry + 8, little);
+      return value >= 1 && value <= 8 ? value : 1;
+    }
+  }
+  return 1;
 }
 
 function readPng(bytes: Uint8Array, view: DataView): ImageInfo | null {
@@ -31,6 +73,7 @@ function readPng(bytes: Uint8Array, view: DataView): ImageInfo | null {
 
 function readJpeg(bytes: Uint8Array, view: DataView): ImageInfo | null {
   let offset = 2;
+  let orientation = 1;
   while (offset + 9 < bytes.length) {
     if (bytes[offset] !== 0xff) return null;
     const marker = bytes[offset + 1] ?? 0;
@@ -40,10 +83,14 @@ function readJpeg(bytes: Uint8Array, view: DataView): ImageInfo | null {
     }
     // Start-of-frame markers carry the size; DHT (C4), JPG (C8) and DAC (CC) don't.
     if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      return info("jpeg", view.getUint16(offset + 7), view.getUint16(offset + 5));
+      return info("jpeg", view.getUint16(offset + 7), view.getUint16(offset + 5), orientation);
     }
     const length = view.getUint16(offset + 2);
     if (length < 2) return null;
+    // APP1 holds the EXIF block, which comes before the frame.
+    if (marker === 0xe1 && orientation === 1) {
+      orientation = exifOrientation(view, offset + 4, Math.min(offset + 2 + length, bytes.length));
+    }
     offset += 2 + length;
   }
   return null;

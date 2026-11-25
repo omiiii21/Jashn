@@ -7,7 +7,7 @@ import { ImageResponse } from "next/og";
 import { CARD_HEIGHT_PX, CARD_WIDTH_PX, type CardModel } from "@/components/invite/card-model";
 import { selfBaseUrl } from "@/server/jobs/base-url";
 import { RenderError, type RenderTimings } from "./chromium";
-import { readImageInfo, type ImageInfo } from "./image-size";
+import { orientedSize, readImageInfo, type ImageInfo } from "./image-size";
 import { headingLineFor, wordingLineFor, type OgHindiLine, type OgHindiLineId } from "./og-hindi-lines";
 import {
   fitLabel,
@@ -114,6 +114,57 @@ export const fetchPhoto: OgPhotoLoader = async (url) => {
 
 type LoadedPhoto = { data_uri: string; info: ImageInfo; alt: string };
 
+/** The photo types next/og draws: the studio's JPEG and PNG, and the probe's SVG placeholder. */
+const OG_DRAWABLE_PHOTO_KINDS: ReadonlySet<ImageInfo["kind"]> = new Set(["jpeg", "png", "svg"]);
+
+/**
+ * CSS transforms that undo each EXIF orientation (2 to 8), as Chromium's default
+ * `image-orientation: from-image` does. Satori and its rasterisers ignore EXIF.
+ */
+const ORIENTATION_TRANSFORMS: Record<number, string> = {
+  2: "scaleX(-1)",
+  3: "rotate(180deg)",
+  4: "scaleY(-1)",
+  5: "scaleX(-1) rotate(90deg)",
+  6: "rotate(90deg)",
+  7: "rotate(90deg) scaleX(-1)",
+  8: "rotate(-90deg)",
+};
+
+/** The photo at its display size, turned to its EXIF orientation. Never cropped (1.3). */
+function photoImage(photo: LoadedPhoto, size: { width: number; height: number }): ReactElement {
+  const transform = ORIENTATION_TRANSFORMS[photo.info.orientation];
+  if (!transform) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- Satori draws <img>, not next/image.
+      <img src={photo.data_uri} alt={photo.alt} width={size.width} height={size.height} style={{ width: size.width, height: size.height }} />
+    );
+  }
+  // The stored pixels are laid out unturned and centred, then turned about their centre,
+  // so a quarter turn swaps their width and height into the display box.
+  const quarter = photo.info.orientation >= 5;
+  const width = quarter ? size.height : size.width;
+  const height = quarter ? size.width : size.height;
+  return (
+    <div style={{ display: "flex", position: "relative", width: size.width, height: size.height }}>
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: (size.width - width) / 2,
+          top: (size.height - height) / 2,
+          width,
+          height,
+          transform,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- Satori draws <img>, not next/image. */}
+        <img src={photo.data_uri} alt={photo.alt} width={width} height={height} style={{ width, height }} />
+      </div>
+    </div>
+  );
+}
+
 async function loadPhoto(model: CardModel, loader: OgPhotoLoader): Promise<LoadedPhoto | null> {
   if (!model.photo) return null;
   let bytes: Uint8Array;
@@ -123,7 +174,9 @@ async function loadPhoto(model: CardModel, loader: OgPhotoLoader): Promise<Loade
     throw new Error("photo not loaded");
   }
   const info = readImageInfo(bytes);
-  if (!info) throw new Error("photo not loaded");
+  // Neither of next/og's rasterisers (resvg, or sharp when it loads) draws an embedded WEBP:
+  // the box would come out empty. Fail as the guard does for a photo that doesn't decode.
+  if (!info || !OG_DRAWABLE_PHOTO_KINDS.has(info.kind)) throw new Error("photo not loaded");
   const data_uri = `data:${info.mime};base64,${Buffer.from(bytes).toString("base64")}`;
   return { data_uri, info, alt: model.photo.alt };
 }
@@ -292,7 +345,7 @@ function buildBlocks({ model, palette, heading, wording, photo }: CardParts): Bl
   }
 
   if (photo) {
-    const at = (fit: OgFit) => photoDisplaySize(photo.info, fit.photo_max_h);
+    const at = (fit: OgFit) => photoDisplaySize(orientedSize(photo.info), fit.photo_max_h);
     blocks.push({
       key: "photo",
       gap_px: 30,
@@ -310,8 +363,7 @@ function buildBlocks({ model, palette, heading, wording, photo }: CardParts): Bl
             }}
           >
             {/* The photo as uploaded: scaled to fit, never cropped (1.3). */}
-            {/* eslint-disable-next-line @next/next/no-img-element -- Satori draws <img>, not next/image. */}
-            <img src={photo.data_uri} alt={photo.alt} width={size.width} height={size.height} style={{ width: size.width, height: size.height }} />
+            {photoImage(photo, size)}
           </div>
         );
       },
@@ -431,6 +483,9 @@ function cardElement(blocks: Block[], palette: OgPalette, fit: OgFit): ReactElem
             border: `1px solid ${palette.foil}`,
           }}
         />
+        {/* No overflow clip on the body: chooseFit already keeps the content inside it, and
+            under a clipping ancestor sharp (which next/og prefers to resvg when it loads)
+            cuts a turned photo short. */}
         <div
           style={{
             display: "flex",
@@ -442,7 +497,6 @@ function cardElement(blocks: Block[], palette: OgPalette, fit: OgFit): ReactElem
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            overflow: "hidden",
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>

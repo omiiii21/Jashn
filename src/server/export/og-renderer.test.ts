@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildCardModel, type CardModel } from "@/components/invite/card-model";
 import { RenderError } from "./chromium";
 import { renderCardOg, type OgPhotoLoader } from "./og-renderer";
@@ -35,6 +35,10 @@ async function keep(name: string, png: Uint8Array): Promise<void> {
 }
 
 describe("renderCardOg", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("renders the probe REV-3 card as a 1080 × 1350 PNG", async () => {
     const png = await renderCardOg(probeModel("rev3"), { load_photo: publicPhoto });
     expect(pngSize(png)).toEqual({ width: 1080, height: 1350 });
@@ -91,6 +95,37 @@ describe("renderCardOg", () => {
     expect(error).toBeInstanceOf(RenderError);
     expect((error as RenderError).detail).toBe("photo not loaded");
     expect((error as RenderError).message).not.toContain("example.invalid");
+  });
+
+  it("fetches nothing while drawing: no fallback font for any text it sets", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network in this test"));
+    const base = probeModel("rev3");
+    const model: CardModel = {
+      ...base,
+      lead_in: "With the blessings of Shāntā and our families",
+      functions: base.functions.map((fn) => ({ ...fn, venue_line: "Ħall Ĉ, Mallige Gardens, Whitefield, Bengaluru" })),
+    };
+    const png = await renderCardOg(model, { load_photo: publicPhoto });
+    expect(pngSize(png)).toEqual({ width: 1080, height: 1350 });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await keep("og-no-fetch.png", png);
+  }, 30_000);
+
+  it("fails names it has no glyphs for rather than fetching a font or dropping letters", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network in this test"));
+    const model: CardModel = { ...probeModel("rev3", false), names: "Ĉiro & Ŧara" };
+    await expect(renderCardOg(model)).rejects.toMatchObject({ code: "RENDER_FAILED" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("fails with RENDER_FAILED 'photo not loaded' for a WEBP, which next/og draws as an empty box", async () => {
+    const webp = new Uint8Array(30);
+    webp.set([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58]);
+    webp.set([0xdb, 0x05, 0x00, 0xe7, 0x03, 0x00], 24);
+    await expect(renderCardOg(probeModel("rev3"), { load_photo: async () => webp })).rejects.toMatchObject({
+      code: "RENDER_FAILED",
+      detail: "photo not loaded",
+    });
   });
 
   it("fails with RENDER_FAILED 'photo not loaded' for a GIF", async () => {

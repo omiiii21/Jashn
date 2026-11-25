@@ -44,11 +44,16 @@ const FALLBACK_ADVANCE_EM = 0.75;
 const WIDTH_SAFETY = 1.03;
 
 /**
- * Characters the committed Latin faces set: Basic Latin, Latin-1, Latin Extended-A,
- * general punctuation and a few symbols. Anything else (Devanagari above all) would need
- * shaping or a fallback face Satori fetches at render time, so it never reaches the og card.
+ * Characters the committed faces set, read from their cmaps: Eczar's Latin subset (Basic
+ * Latin, Latin-1, most of Latin Extended-A, and the common punctuation and spaces) plus the
+ * few spaces only Anek has. Satori falls back between the faces it was given, so a line in
+ * Anek can borrow an Eczar glyph. Anything else would make next/og fetch a Google font at
+ * render time (sending the text with it) or draw nothing; Devanagari would need shaping.
+ * So it never reaches the og card. Regenerate this list if the font files change.
  */
-const LATIN_ONLY = /^[\u0009\u000A\u000D -~ -ſ -⁯€™]*$/;
+// prettier-ignore
+const LATIN_ONLY =
+  /^[\t\n\r\u0020-\u007E\u00A0-\u0107\u010C-\u0113\u0116-\u011B\u011E-\u011F\u0122-\u0123\u012A-\u012B\u012E-\u0131\u0136-\u0137\u0139-\u013E\u0141-\u0148\u014C-\u014D\u0150-\u015B\u015E-\u0165\u016A-\u016B\u016E-\u0173\u0178-\u017E\u2002-\u2003\u2007-\u200D\u2013-\u2014\u2018-\u201A\u201C-\u201E\u2020-\u2022\u2026\u2030\u2039-\u203A\u2044\u20AC\u2122]*$/;
 
 export function isLatinText(text: string): boolean {
   return LATIN_ONLY.test(text);
