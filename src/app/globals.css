@@ -1,26 +1,498 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+/* ==========================================================================
+   Jashn token layer for src/app/globals.css (decision D4)
+   Status: Proposed. Source: DESIGN.md and docs/prep/design-direction.md
+   sections 4, 5, 7 and 11. Light theme only (design-direction 4.3).
+
+   How to merge, after `shadcn init` has written its own blocks:
+   1. Keep shadcn's top lines: `@import "tailwindcss";`,
+      `@import "tw-animate-css";` and `@custom-variant dark (...)`.
+   2. Paste this whole file at the END of globals.css. Later declarations
+      win, so block 3 overrides shadcn's :root colour values and block 2
+      overrides shadcn's radius lines in its @theme inline. Deleting
+      shadcn's :root colour values is tidier, but not required.
+   3. Delete these create-next-app leftovers, or they break the layer:
+      - the `@media (prefers-color-scheme: dark) { :root { ... } }` block
+      - `body { font-family: Arial, Helvetica, sans-serif; }`, which beats
+        every layered font rule
+      - `--font-sans: var(--font-geist-sans);` and
+        `--font-mono: var(--font-geist-mono);`, plus the Geist imports in
+        layout.tsx
+   4. shadcn's `.dark { ... }` block can stay or go. Nothing sets `.dark`.
+   5. fonts.ts sets next/font `variable` to --font-display (Eczar),
+      --font-body (Anek Devanagari) and --font-hindi (Tiro Devanagari
+      Hindi). layout.tsx must put those classes on <html>, not <body>,
+      or the page default font cannot resolve them.
+
+   Naming: the raw palette is --jashn-*, which nothing else uses. The
+   Tailwind role names (bg-paper, text-ink-2, rounded-sheet, ...) do not
+   collide with shadcn's semantic names (background, primary, ...) or with
+   Tailwind's default palette.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Raw palette and scalar tokens (plain custom properties, always emitted)
+   -------------------------------------------------------------------------- */
+:root {
+  /* Neutrals */
+  --jashn-paper: #fffcf5; /* working surfaces: tables, sheets, forms */
+  --jashn-ivory: #f7efdf; /* app ground, invitation card stock */
+  --jashn-ivory-deep: #eee2cb; /* side panels, studio canvas, voice panel */
+  --jashn-ink: #2b1d1a; /* primary text */
+  --jashn-ink-2: #54443e; /* secondary text */
+  --jashn-ink-3: #6e5d55; /* meta text, placeholders */
+  --jashn-line: #e3d5be; /* decorative hairlines (no contrast duty) */
+  --jashn-line-strong: #8e7b6e; /* input borders, control outlines (3:1) */
+
+  /* Brand */
+  --jashn-maroon: #6a1224; /* primary actions, links, selected, committed */
+  --jashn-maroon-deep: #4e0c1a; /* shell (rail and header), guest ground */
+  --jashn-maroon-tint: #f4e1df; /* selected row, text selection */
+  --jashn-on-maroon-2: #e9cfc6; /* secondary text on maroon */
+  --jashn-gold: #c9a24e; /* foil only; never small text on ivory or paper */
+  --jashn-gold-ink: #7d5b17; /* gold as text on light grounds */
+
+  /* Status: always with an icon and a word */
+  --jashn-paid: #2f6a3b;
+  --jashn-paid-tint: #e3eedf;
+  --jashn-due: #8a5300;
+  --jashn-due-tint: #fbebc4;
+  --jashn-overdue: #b3261e;
+  --jashn-overdue-tint: #fadbd6;
+  --jashn-proposal: #1d5468;
+  --jashn-proposal-tint: #ddebef;
+  --jashn-wash: #f6e4b4; /* "just changed" highlight */
+
+  /* Alternative invitation theme (invitation only, if time allows) */
+  --jashn-peacock: #14505e;
+  --jashn-peacock-deep: #0d3a45;
+
+  /* Invitation roles. Maroon & Gold is the default; see block 3b. */
+  --jashn-invite-ground: var(--jashn-maroon-deep);
+  --jashn-invite-stock: var(--jashn-ivory);
+  --jashn-invite-name: var(--jashn-maroon);
+  --jashn-invite-foil: var(--jashn-gold);
+  --jashn-invite-blessing: var(--jashn-gold-ink);
+  --jashn-invite-ink: var(--jashn-ink);
+
+  /* Meta text: 14/20 on phones (the floor), 13/18 from 768 px up */
+  --jashn-text-meta: 0.875rem;
+  --jashn-text-meta-lh: 1.25rem;
+
+  /* Motion durations (design-direction 7). Tailwind: duration-150 etc. */
+  --jashn-dur-press: 100ms;
+  --jashn-dur-wash-in: 120ms;
+  --jashn-dur-quick: 150ms; /* routine changes, crossfades, RSVP chip */
+  --jashn-dur-dismiss: 160ms; /* review card dismiss, drag snap-back */
+  --jashn-dur-exit: 200ms; /* exits, save check, phone sheet close */
+  --jashn-dur-rise: 240ms; /* review card rise, desktop dock */
+  --jashn-dur-sheet: 280ms; /* phone bottom sheet open */
+  --jashn-dur-route: 300ms;
+  --jashn-dur-foil: 700ms; /* guest card foil draw, once per visit */
+  --jashn-dur-wash-hold: 1600ms;
+  --jashn-dur-wash-fade: 1200ms;
+  --jashn-animate-wash: jashn-wash 2920ms linear; /* 120 in, 1600 hold, 1200 fade */
+
+  /* Layout */
+  --jashn-gutter: 1rem; /* 16 px phone side gutter */
+  --jashn-dock-width: 25rem; /* 400 px desktop voice panel */
+  --jashn-mic-size: 2.75rem; /* 44 px minimum touch target */
+}
+
+@media (min-width: 48rem) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --jashn-text-meta: 0.8125rem;
+    --jashn-text-meta-lh: 1.125rem;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* The wash shows for 3 s without the fade, then goes (design-direction 7.2) */
+    --jashn-animate-wash: jashn-wash-still 3s linear;
+  }
+}
+
+/* The wash: the element's own background, then wash, held, then back. */
+@keyframes jashn-wash {
+  4%,
+  59% {
+    background-color: var(--jashn-wash);
+  }
+}
+
+@keyframes jashn-wash-still {
+  from,
+  to {
+    background-color: var(--jashn-wash);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   2. Tailwind theme: role utilities (inline, so scoped overrides work)
+   -------------------------------------------------------------------------- */
+@theme inline {
+  /* Colours: bg-paper, text-ink-2, border-line-strong, bg-maroon-deep,
+     text-gold-ink, bg-paid-tint text-paid, bg-wash, bg-invite-ground ... */
+  --color-paper: var(--jashn-paper);
+  --color-ivory: var(--jashn-ivory);
+  --color-ivory-deep: var(--jashn-ivory-deep);
+  --color-ink: var(--jashn-ink);
+  --color-ink-2: var(--jashn-ink-2);
+  --color-ink-3: var(--jashn-ink-3);
+  --color-line: var(--jashn-line);
+  --color-line-strong: var(--jashn-line-strong);
+  --color-maroon: var(--jashn-maroon);
+  --color-maroon-deep: var(--jashn-maroon-deep);
+  --color-maroon-tint: var(--jashn-maroon-tint);
+  --color-on-maroon-2: var(--jashn-on-maroon-2);
+  --color-gold: var(--jashn-gold);
+  --color-gold-ink: var(--jashn-gold-ink);
+  --color-paid: var(--jashn-paid);
+  --color-paid-tint: var(--jashn-paid-tint);
+  --color-due: var(--jashn-due);
+  --color-due-tint: var(--jashn-due-tint);
+  --color-overdue: var(--jashn-overdue);
+  --color-overdue-tint: var(--jashn-overdue-tint);
+  --color-proposal: var(--jashn-proposal);
+  --color-proposal-tint: var(--jashn-proposal-tint);
+  --color-wash: var(--jashn-wash);
+  --color-peacock: var(--jashn-peacock);
+  --color-peacock-deep: var(--jashn-peacock-deep);
+  --color-invite-ground: var(--jashn-invite-ground);
+  --color-invite-stock: var(--jashn-invite-stock);
+  --color-invite-name: var(--jashn-invite-name);
+  --color-invite-foil: var(--jashn-invite-foil);
+  --color-invite-blessing: var(--jashn-invite-blessing);
+  --color-invite-ink: var(--jashn-invite-ink);
+
+  /* Fonts. next/font sets --font-display, --font-body and --font-hindi on
+     <html>. The theme keys use other names so nothing references itself.
+     font-sans (Anek Devanagari) is also the page default. */
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-display), ui-serif, Georgia, serif; /* Eczar: names and titles only */
+  --font-classic: var(--font-hindi), var(--font-display), ui-serif, serif; /* Tiro, studio only */
+
+  /* Type scale (size/line-height in px in the comments) */
+  --text-meta: var(--jashn-text-meta); /* 14/20 phone, 13/18 from 768 px */
+  --text-meta--line-height: var(--jashn-text-meta-lh);
+  --text-table: 0.9375rem; /* 15/22 */
+  --text-table--line-height: 1.375rem;
+  --text-body: 1rem; /* 16/24 */
+  --text-body--line-height: 1.5rem;
+  --text-heading: 1.125rem; /* 18/26, 600 */
+  --text-heading--line-height: 1.625rem;
+  --text-heading--font-weight: 600;
+  --text-panel: 1.375rem; /* 22/28, 600; key amounts with tabular-nums */
+  --text-panel--line-height: 1.75rem;
+  --text-panel--font-weight: 600;
+  --text-rail-name: 1.25rem; /* Eczar 20/26, 600: use with font-serif */
+  --text-rail-name--line-height: 1.625rem;
+  --text-rail-name--font-weight: 600;
+  --text-title: 1.75rem; /* Eczar 28/34, 600: the h1, use with font-serif */
+  --text-title--line-height: 2.125rem;
+  --text-title--font-weight: 600;
+  --text-names: clamp(2.75rem, 2.2rem + 2.4vw, 3.25rem); /* guest names, Eczar 44-52 px */
+  --text-names--line-height: 1.15;
+  --text-names--letter-spacing: -0.01em; /* Latin only: add tracking-normal on a Devanagari line */
+  --text-names--font-weight: 600;
+  --text-insert-title: clamp(1.5rem, 1.4rem + 0.5vw, 1.625rem); /* Eczar 24-26 px, 500 */
+  --text-insert-title--line-height: 1.4;
+  --text-insert-title--font-weight: 500;
+  --text-wording: 1.125rem; /* invitation wording, Eczar 18/28, 400 */
+  --text-wording--line-height: 1.75rem;
+
+  /* Spacing: the default 4 px base. Use steps 1, 2, 3, 4, 6, 8, 12 and 16
+     only (4, 8, 12, 16, 24, 32, 48 and 64 px). */
+  --spacing: 0.25rem;
+
+  /* Radii: rounded-paper, rounded-chip, rounded-control, rounded-sheet */
+  --radius-paper: 0.125rem; /* 2 px: invitation card and inserts */
+  --radius-chip: 0.375rem; /* 6 px */
+  --radius-control: 0.5rem; /* 8 px: buttons, inputs */
+  --radius-sheet: 0.75rem; /* 12 px: workspace sheets and panels */
+
+  /* shadcn's radius scale pinned to the same values (replaces its calc()
+     lines): Button and Input use rounded-md, Dialog rounded-lg, Card rounded-xl */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 0.75rem;
+
+  /* Elevation: tonal layers first; shadows in three places only */
+  --shadow-insert: 0 6px 18px rgb(43 29 26 / 0.25); /* insert cards on the maroon ground */
+  --shadow-overlay: 0 8px 24px rgb(43 29 26 / 0.16); /* popovers, menus, dialogs (proposed) */
+  --shadow-sheet: 0 -8px 24px rgb(43 29 26 / 0.14); /* phone voice sheet (proposed) */
+
+  /* Motion: arrivals decelerate, exits accelerate; nothing bounces */
+  --ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-leave: cubic-bezier(0.5, 0, 0.75, 0);
+  --animate-wash: var(--jashn-animate-wash);
+
+  /* Layout: max-w-content (1120 px), w-dock (400 px) */
+  --container-content: 70rem;
+  --container-dock: var(--jashn-dock-width);
+}
+
+/* --------------------------------------------------------------------------
+   3. shadcn semantic variables mapped onto the Jashn palette
+      (unlayered :root, so it overrides shadcn's :root when pasted after it)
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --radius: 0.5rem; /* 8 px, the control radius */
+
+  --background: var(--jashn-ivory);
+  --foreground: var(--jashn-ink);
+  --card: var(--jashn-paper);
+  --card-foreground: var(--jashn-ink);
+  --popover: var(--jashn-paper);
+  --popover-foreground: var(--jashn-ink);
+  --primary: var(--jashn-maroon);
+  --primary-foreground: var(--jashn-paper);
+  --secondary: var(--jashn-ivory-deep);
+  --secondary-foreground: var(--jashn-ink);
+  --muted: var(--jashn-ivory-deep);
+  --muted-foreground: var(--jashn-ink-3);
+  --accent: var(--jashn-ivory); /* hover: paper moves to ivory */
+  --accent-foreground: var(--jashn-ink);
+  --destructive: var(--jashn-overdue);
+  --destructive-foreground: var(--jashn-paper);
+  --border: var(--jashn-line);
+  --input: var(--jashn-line-strong);
+  --ring: var(--jashn-maroon);
+
+  /* Money bar: paid, committed, planned, proposed, due */
+  --chart-1: var(--jashn-paid);
+  --chart-2: var(--jashn-maroon);
+  --chart-3: var(--jashn-line-strong);
+  --chart-4: var(--jashn-proposal);
+  --chart-5: var(--jashn-due);
+
+  /* The shell (rail and header) */
+  --sidebar: var(--jashn-maroon-deep);
+  --sidebar-foreground: var(--jashn-ivory);
+  --sidebar-primary: var(--jashn-gold);
+  --sidebar-primary-foreground: var(--jashn-maroon-deep);
+  --sidebar-accent: var(--jashn-maroon); /* active item: a lighter maroon block */
+  --sidebar-accent-foreground: var(--jashn-ivory);
+  --sidebar-border: var(--jashn-maroon);
+  --sidebar-ring: var(--jashn-gold);
+}
+
+/* 3a. Inside the maroon shell: put data-surface="shell" on the rail and
+       the header. shadcn components inside get ivory text, a gold focus
+       ring and maroon hover blocks. The element still needs
+       bg-maroon-deep text-ivory (or bg-sidebar text-sidebar-foreground). */
+[data-surface="shell"] {
+  --foreground: var(--jashn-ivory);
+  --muted-foreground: var(--jashn-on-maroon-2);
+  --accent: var(--jashn-maroon);
+  --accent-foreground: var(--jashn-ivory);
+  --border: var(--jashn-maroon);
+  --ring: var(--jashn-gold);
+}
+
+/* 3b. Peacock & Gold invitation theme: put data-invite-theme="peacock" on
+       the invitation root. Only the ground and the names change. */
+[data-invite-theme="peacock"] {
+  --jashn-invite-ground: var(--jashn-peacock-deep);
+  --jashn-invite-name: var(--jashn-peacock);
+}
+
+/* 3c. Same as shadcn's own @theme inline colour lines. This is a harmless
+       duplicate if init wrote them, and it keeps bg-background,
+       text-primary and the rest working if init's block is missing. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* --------------------------------------------------------------------------
+   4. Browser surfaces (base layer, so utilities still win). Lane B owns
+      these from the merge on.
+   -------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    caret-color: var(--jashn-maroon);
+    accent-color: var(--jashn-maroon);
+    scrollbar-color: var(--jashn-line-strong) transparent;
+  }
+
+  ::selection {
+    background-color: var(--jashn-maroon-tint);
+    color: var(--jashn-ink);
+  }
+
+  /* 2 px maroon ring at 2 px offset; gold inside the shell (via --ring) */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Never track Devanagari: letter-spacing breaks the shirorekha */
+  :lang(hi) {
+    letter-spacing: normal;
+  }
 }
