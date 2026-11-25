@@ -95,3 +95,20 @@ export function getVoiceTurnStore(): VoiceTurnStore {
   }
   return memoryStore(state);
 }
+
+/**
+ * Every turn the in-memory fake holds that was created at or after `since`, across speakers.
+ * Only the flags drawer's two-hour counts read it (flagsmith 5.9), and only while no database
+ * is configured; with one, the drawer counts `app.voice_turns` directly.
+ */
+export function memoryTurnsSince(since: IsoInstant): StoredTurn[] {
+  const holder = globalThis as unknown as Record<string, MemoryState | undefined>;
+  const state = holder[GLOBAL_KEY];
+  if (!state) return [];
+  const sinceMs = instantMs(since);
+  const rows: StoredTurn[] = [];
+  for (const turn of state.turns.values()) {
+    if (instantMs(turn.created_at) >= sinceMs) rows.push(clone(turn));
+  }
+  return rows;
+}
