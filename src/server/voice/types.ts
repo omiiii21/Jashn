@@ -31,6 +31,7 @@ export const ASK_KINDS = [
   "query_changes",
   "query_catering",
   "query_shagun",
+  "query_note",
 ] as const;
 export type AskKind = (typeof ASK_KINDS)[number];
 
@@ -45,6 +46,7 @@ export const WRITE_KINDS = [
   "record_payment",
   "correct_payment",
   "add_requirement",
+  "add_note",
   "add_guest",
   "set_rsvp",
   "set_dietary",

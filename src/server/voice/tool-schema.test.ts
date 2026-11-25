@@ -96,11 +96,11 @@ describe("proposeActionsSchema", () => {
     if (result.success) expect(result.data.actions.length).toBe(args.actions.length);
   });
 
-  it("covers the 23 kinds", () => {
+  it("covers the 25 kinds", () => {
     for (const kind of [...ASK_KINDS, ...WRITE_KINDS]) {
       expect(proposeActionsSchema.safeParse({ ...O03, actions: [{ kind }] }).success).toBe(true);
     }
-    expect(ASK_KINDS.length + WRITE_KINDS.length).toBe(23);
+    expect(ASK_KINDS.length + WRITE_KINDS.length).toBe(25);
   });
 
   it("rejects an unknown kind", () => {

@@ -7,7 +7,7 @@ import { routes, withHighlight } from "@/contracts/routes";
 
 import { checkValue, createReadAccess, fold, formatLongDate, formatTime, formatWeekdayDate, formatWeekdayDateHi, hasWords, resolveEvent, resolveMember, resolveVendor, roleOrName, speakTimeEn, type ReadAccess, type VendorRef } from "./resolve/support";
 import { clockHi, clockHinglish, clockHinglishWords, countHi, countHinglish, formatInr, inrWords, spoken } from "./resolve/say";
-import { reply, shagunNotSetUp } from "./templates";
+import { fixedReply, reply, shagunNotSetUp } from "./templates";
 import type { ReplyText, ResolveContext, Snapshot, StoredOption, ToolAction } from "./types";
 
 /**
@@ -743,6 +743,28 @@ async function answerCatering(ctx: ResolveContext, action: ToolAction, deps: Ans
 }
 
 // ---------------------------------------------------------------------------
+// query_note: a saved note, word for word
+// ---------------------------------------------------------------------------
+
+/** The note asked about: by reference, else the one note with that topic. Never a guess. */
+async function answerNote(ctx: ResolveContext, action: ToolAction, deps: AnswerDeps): Promise<AnswerResult> {
+  const r = ctx.register;
+  const notes = (await deps.access.notes())?.notes ?? [];
+  const id = typeof action.note_id === "string" ? ctx.snapshot.ref_map[action.note_id] : undefined;
+  let note = id ? notes.find((row) => row.note_id === id) : undefined;
+  if (!note && typeof action.topic === "string" && action.topic.trim()) {
+    const wanted = fold(action.topic);
+    const hits = notes.filter((row) => fold(row.topic) === wanted);
+    if (hits.length === 1) note = hits[0];
+  }
+  if (!note) return { kind: "answer", cards: [], reply: fixedReply("no_context", r) };
+  const card: VoiceAnswerCard = { title: `Note: ${note.topic}`, figure: note.note_text, link: null };
+  const lead = r === "en" ? "From your notes:" : r === "hinglish" ? "Aapke notes mein:" : "आपके नोट्स में:";
+  const speechLead = r === "hinglish" ? "आपके notes में:" : lead;
+  return { kind: "answer", cards: [card], reply: spoken(r, `${lead} ${note.note_text}`, `${speechLead} ${note.note_text}`) };
+}
+
+// ---------------------------------------------------------------------------
 // The entry point
 // ---------------------------------------------------------------------------
 
@@ -766,6 +788,8 @@ export async function answerQuestion(ctx: ResolveContext, action: ToolAction, in
       return answerCatering(ctx, action, full);
     case "query_shagun":
       return { kind: "answer", cards: [], reply: shagunNotSetUp(ctx.register) };
+    case "query_note":
+      return answerNote(ctx, action, full);
     default:
       return { kind: "answer", cards: [], reply: reply(ctx.register, "") };
   }
