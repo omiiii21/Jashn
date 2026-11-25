@@ -1,4 +1,4 @@
-import type { PublicationSnapshot, WeddingId } from "@/contracts/domain";
+import type { AssetDto, PublicationSnapshot, WeddingId } from "@/contracts/domain";
 
 import type { ExportAttemptRow, ExportJobRow, JobPublicationRow, JobStore, JobWeddingRow } from "./store";
 
@@ -11,12 +11,13 @@ export type MemoryJobState = {
   publications: (JobPublicationRow & { wedding_id: WeddingId })[];
   invitations: { wedding_id: WeddingId; guest_id: string; event_id: string }[];
   member_names: Record<string, string>;
+  assets: (AssetDto & { wedding_id: WeddingId })[];
   jobs: ExportJobRow[];
   attempts: ExportAttemptRow[];
 };
 
 export function emptyJobState(): MemoryJobState {
-  return { weddings: new Map(), publications: [], invitations: [], member_names: {}, jobs: [], attempts: [] };
+  return { weddings: new Map(), publications: [], invitations: [], member_names: {}, assets: [], jobs: [], attempts: [] };
 }
 
 export function addPublication(state: MemoryJobState, wedding_id: WeddingId, id: string, revision: number, snapshot: PublicationSnapshot): void {
@@ -56,6 +57,13 @@ export function createMemoryJobStore(state: MemoryJobState): JobStore<unknown> {
     },
     async readMemberNames() {
       return { ...state.member_names };
+    },
+    async readAsset(_tx, wedding_id, asset_id) {
+      const row = state.assets.find((asset) => asset.wedding_id === wedding_id && asset.asset_id === asset_id);
+      if (!row) return null;
+      const { wedding_id: _owner, ...asset } = row;
+      void _owner;
+      return asset;
     },
     async readJob(_tx, job_id) {
       const row = state.jobs.find((job) => job.id === job_id);

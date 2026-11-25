@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ExportFormat, MemberId, PublicationId, PublicationSnapshot, WeddingId } from "@/contracts/domain";
+import type { AssetDto, AssetId, ExportFormat, MemberId, PublicationId, PublicationSnapshot, WeddingId } from "@/contracts/domain";
 import type { ExportJobStatus, ExportRenderer, ExportTrigger, FailInjection } from "@/contracts/jobs";
 
 /**
@@ -92,6 +92,8 @@ export interface JobStore<Tx> {
   readActiveInvitations(tx: Tx | null, wedding_id: WeddingId): Promise<{ guest_id: string; event_id: string }[]>;
   /** Display names by member id, for the attempt log. */
   readMemberNames(tx: Tx | null, wedding_id: WeddingId): Promise<Record<string, string>>;
+  /** One asset of this wedding (the card's couple photo), or null. */
+  readAsset(tx: Tx | null, wedding_id: WeddingId, asset_id: AssetId): Promise<AssetDto | null>;
 
   readJob(tx: Tx | null, job_id: string): Promise<ExportJobRow | null>;
   /** Reads the job with a row lock (FOR UPDATE). */
