@@ -28,6 +28,7 @@ import {
   pruneOverlay,
   receiptText,
   shownStyle,
+  STYLE_KEYS,
   STYLE_TEXT_LIMITS,
   styleEdits,
   validationText,
@@ -65,6 +66,7 @@ function ChoiceGroup<V extends string>({
   choices,
   onChange,
   caption,
+  error = null,
 }: {
   name: string;
   legend: string;
@@ -72,9 +74,14 @@ function ChoiceGroup<V extends string>({
   choices: Choice<V>[];
   onChange: (value: V) => void;
   caption?: string;
+  /** A refusal from the last save that belongs to this group, shown under it. */
+  error?: string | null;
 }) {
   return (
-    <fieldset className="flex flex-col gap-2" aria-describedby={caption ? `${name}-caption` : undefined}>
+    <fieldset
+      className="flex flex-col gap-2"
+      aria-describedby={describedBy(caption && `${name}-caption`, error && `${name}-error`)}
+    >
       <legend className="mb-2 text-body font-medium text-ink">{legend}</legend>
       {choices.map((choice) => {
         const id = `${name}-${choice.value}`;
@@ -119,6 +126,7 @@ function ChoiceGroup<V extends string>({
           {caption}
         </p>
       ) : null}
+      <FieldError id={`${name}-error`} text={error} />
     </fieldset>
   );
 }
@@ -170,6 +178,8 @@ export function InviteStudio(props: InviteStudioProps) {
   const [serverErrors, setServerErrors] = useState<Partial<Record<StyleKey, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
+  /** A refused save, read out through the polite live region (acceptance 6.5). */
+  const [announcement, setAnnouncement] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [spinner, setSpinner] = useState(false);
   const keyFor = useRef<{ body: string; key: string } | null>(null);
@@ -220,6 +230,7 @@ export function InviteStudio(props: InviteStudioProps) {
     });
     setFormError(null);
     setReceipt(null);
+    setAnnouncement(null);
   }
 
   function errorFor(key: StyleKey): string | null {
@@ -230,8 +241,10 @@ export function InviteStudio(props: InviteStudioProps) {
 
   async function save() {
     if (saving) return;
-    if (Object.keys(diff.errors).length > 0) {
+    const firstInvalid = STYLE_KEYS.find((key) => diff.errors[key]);
+    if (firstInvalid) {
       setShowErrors(true);
+      setAnnouncement(`The draft wasn't saved. ${validationText(firstInvalid, diff.errors[firstInvalid] ?? "required")}`);
       return;
     }
     const input = diff.input;
@@ -244,6 +257,7 @@ export function InviteStudio(props: InviteStudioProps) {
 
     setSaving(true);
     setFormError(null);
+    setAnnouncement(null);
     try {
       const response = await dispatch({
         wedding_id,
@@ -252,6 +266,9 @@ export function InviteStudio(props: InviteStudioProps) {
         idempotency_key: keyFor.current.key,
         source: "ui",
       });
+      // A key names one exact request: any answer, success or refusal, ends it (I1, R8).
+      // Only a thrown call (no answer) keeps it, so a resend replays if the first one landed.
+      keyFor.current = null;
       if (response.ok) {
         setOverlay((current) => commitEdits(serverAtSave, current, input));
         setEdits({});
@@ -259,14 +276,18 @@ export function InviteStudio(props: InviteStudioProps) {
         setShowErrors(false);
         setServerErrors({});
         setReceipt(receiptText(member.display_name, new Date()));
-        keyFor.current = null;
         // The publish sheet needs the new draft_version and unpublished changes (P6, P8).
         router.refresh();
         return;
       }
       const error = fieldError(response.error);
-      if (error.key) setServerErrors((current) => ({ ...current, [error.key as StyleKey]: error.text }));
-      else setFormError(error.text);
+      if (error.key) {
+        setServerErrors((current) => ({ ...current, [error.key as StyleKey]: error.text }));
+        // The photo's own live region reads its error; every other field's is read here.
+        if (error.key !== "photo_asset_id") setAnnouncement(`The draft wasn't saved. ${error.text}`);
+      } else {
+        setFormError(error.text);
+      }
     } catch {
       setFormError("The draft wasn't saved. Check your connection and try again.");
     } finally {
@@ -424,6 +445,7 @@ export function InviteStudio(props: InviteStudioProps) {
           legend="Frame"
           value={shown.photo_frame}
           onChange={(value) => edit("photo_frame", value)}
+          error={serverErrors.photo_frame ?? null}
           choices={[
             { value: "mounted", label: "Mounted" },
             { value: "arch", label: "Arch", disabled_reason: "The arch frame comes later." },
@@ -435,6 +457,7 @@ export function InviteStudio(props: InviteStudioProps) {
           legend="Layout"
           value={shown.layout}
           onChange={(value) => edit("layout", value)}
+          error={serverErrors.layout ?? null}
           caption="Layout sets the guest page. The card stays the same."
           choices={[
             { value: "card_with_inserts", label: "Card with inserts" },
@@ -448,6 +471,7 @@ export function InviteStudio(props: InviteStudioProps) {
           legend="Colours"
           value={shown.theme}
           onChange={(value) => edit("theme", value)}
+          error={serverErrors.theme ?? null}
           choices={(["maroon_gold", "peacock_gold"] as const).map((theme) => ({
             value: theme,
             label: INVITE_THEME_LABELS[theme],
@@ -460,6 +484,7 @@ export function InviteStudio(props: InviteStudioProps) {
           legend="Typeface"
           value={shown.typeface}
           onChange={(value) => edit("typeface", value)}
+          error={serverErrors.typeface ?? null}
           caption="The typeface sets the Hindi heading and the Hindi lines."
           choices={[
             { value: "eczar", label: "Eczar" },
@@ -478,7 +503,10 @@ export function InviteStudio(props: InviteStudioProps) {
         </div>
 
         <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t border-line bg-paper px-4 py-3 lg:-mx-6 lg:px-6">
-          {formError ? <FieldError id="studio-form-error" text={formError} /> : null}
+          <div aria-live="polite">
+            <FieldError id="studio-form-error" text={formError} />
+            {announcement ? <p className="sr-only">{announcement}</p> : null}
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"

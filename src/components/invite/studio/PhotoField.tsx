@@ -53,17 +53,22 @@ export function PhotoField({
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const shownError = error ?? save_error;
 
   async function upload(file: File) {
     setError(null);
+    setStatus(null);
     const check = checkPhotoFile(file);
     if (!check.ok) {
-      // Refused before any request, so nothing is stored (AT-7.1).
+      // Refused before any request, so nothing is stored (AT-7.1). Clear the input so
+      // picking the same file again still fires a change.
       setError(PHOTO_ERROR_TEXT[check.reason]);
+      if (input.current) input.current.value = "";
       return;
     }
     setBusy(true);
+    setStatus("Uploading the photo.");
     try {
       const size = await measureImage(file);
       const sign = await signPhotoUpload({
@@ -93,10 +98,12 @@ export function PhotoField({
         return;
       }
       on_uploaded({ asset_id: sign.asset_id, preview_url: URL.createObjectURL(file) });
+      setStatus("Photo uploaded. Save the draft to use it on the invitation.");
     } catch {
       setError(PHOTO_ERROR_TEXT.upload);
     } finally {
       setBusy(false);
+      setStatus((current) => (current === "Uploading the photo." ? null : current));
       if (input.current) input.current.value = "";
     }
   }
@@ -149,6 +156,7 @@ export function PhotoField({
             disabled={busy}
             onClick={() => {
               setError(null);
+              setStatus(null);
               on_remove();
             }}
           >
@@ -158,15 +166,16 @@ export function PhotoField({
         ) : null}
       </div>
 
-      <p className="sr-only" aria-live="polite">
-        {busy ? "Uploading the photo." : ""}
-      </p>
-      {shownError ? (
-        <p id="studio-photo-error" className="flex items-start gap-2 text-meta text-overdue">
-          <WarningCircleIcon size={16} aria-hidden="true" className="mt-1 shrink-0" />
-          <span>{shownError}</span>
-        </p>
-      ) : null}
+      {/* Progress, success and refusals are read out politely (acceptance 6.5). */}
+      <div aria-live="polite">
+        {status ? <p className="sr-only">{status}</p> : null}
+        {shownError ? (
+          <p id="studio-photo-error" className="flex items-start gap-2 text-meta text-overdue">
+            <WarningCircleIcon size={16} aria-hidden="true" className="mt-1 shrink-0" />
+            <span>{shownError}</span>
+          </p>
+        ) : null}
+      </div>
     </fieldset>
   );
 }
