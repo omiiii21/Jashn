@@ -184,7 +184,8 @@ test.describe("the landing view (D60, D99)", () => {
   test("shows the saved name, dates, city and budget", async ({ page }) => {
     await open(page, routes.overview(WEDDING_ID));
     const main = page.getByRole("main");
-    await expect(main.getByRole("heading", { level: 1 })).toHaveText("Mira & Kabir");
+    // Voice first (Lane E): the h1 greets the member; the wedding's name stays in the title.
+    await expect(main.getByRole("heading", { level: 1 })).toContainText("Tell me what changed.");
     await expect(main).toContainText("13–14 Dec 2026");
     await expect(main).toContainText("Bengaluru");
     await expect(main.locator('[data-field="budget_inr"]')).toHaveText("₹12,00,000");

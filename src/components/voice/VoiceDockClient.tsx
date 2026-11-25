@@ -32,6 +32,8 @@ import {
   VOICE_STATE_EVENT,
   VOICE_STATE_REQUEST_EVENT,
   VOICE_TOGGLE_EVENT,
+  VOICE_TYPE_EVENT,
+  type VoiceDockBroadcast,
   type VoiceDockState,
 } from "@/components/ui/voice-events";
 import {
@@ -922,12 +924,13 @@ export function VoiceDockClient(props: VoiceDockClientProps) {
   // The voice-first landing card (Lane E) drives this same dock, so it stays the only recorder
   // (D20). Its tap toggles a locked recording, like Space or Enter on the mic; it hears our state.
   const dockState: VoiceDockState = voiceOff || !online ? "off" : busy ? "busy" : recording ? "listening" : "idle";
-  const dockStateRef = useRef<VoiceDockState>(dockState);
+  const heardText = view.heard?.transcript ?? null;
+  const broadcastRef = useRef<VoiceDockBroadcast>({ state: dockState, heard: heardText });
   const toggleRef = useRef<() => void>(() => undefined);
   useEffect(() => {
-    dockStateRef.current = dockState;
-    window.dispatchEvent(new CustomEvent(VOICE_STATE_EVENT, { detail: dockState }));
-  }, [dockState]);
+    broadcastRef.current = { state: dockState, heard: heardText };
+    window.dispatchEvent(new CustomEvent(VOICE_STATE_EVENT, { detail: broadcastRef.current }));
+  }, [dockState, heardText]);
   useEffect(() => {
     toggleRef.current = () => {
       const m = micRef.current;
@@ -942,11 +945,17 @@ export function VoiceDockClient(props: VoiceDockClientProps) {
   });
   useEffect(() => {
     const onToggle = () => toggleRef.current();
-    const onRequest = () => window.dispatchEvent(new CustomEvent(VOICE_STATE_EVENT, { detail: dockStateRef.current }));
+    const onType = () => {
+      setPanelOpen(true);
+      queueMicrotask(() => panelInputRef.current?.focus());
+    };
+    const onRequest = () => window.dispatchEvent(new CustomEvent(VOICE_STATE_EVENT, { detail: broadcastRef.current }));
     window.addEventListener(VOICE_TOGGLE_EVENT, onToggle);
+    window.addEventListener(VOICE_TYPE_EVENT, onType);
     window.addEventListener(VOICE_STATE_REQUEST_EVENT, onRequest);
     return () => {
       window.removeEventListener(VOICE_TOGGLE_EVENT, onToggle);
+      window.removeEventListener(VOICE_TYPE_EVENT, onType);
       window.removeEventListener(VOICE_STATE_REQUEST_EVENT, onRequest);
     };
   }, []);
