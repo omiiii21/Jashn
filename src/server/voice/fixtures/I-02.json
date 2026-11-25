@@ -1,0 +1,22 @@
+{
+ "row_id": "I-02",
+ "start_state": "D3",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "नया card export करो।",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "hinglish",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "request_card_export",
+    "format": "png"
+   }
+  ]
+ },
+ "audio_text": null
+}

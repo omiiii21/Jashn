@@ -1,0 +1,31 @@
+{
+ "row_id": "R-01",
+ "start_state": "D0",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Add Jain food for twelve guests at the reception.",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "en",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "add_requirement",
+    "event_id": "EVT-REC",
+    "text": "Jain food",
+    "quantity": 12,
+    "requirement_category": "catering",
+    "heard": [
+     {
+      "field": "quantity",
+      "phrase": "twelve"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}
