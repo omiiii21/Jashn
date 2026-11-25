@@ -7,6 +7,7 @@ import type {
   ActivityFeedParams,
   CateringEstimate,
   ExportJobStatusModel,
+  WeddingNotes,
   Itinerary,
   ItineraryFunction,
   ItineraryVenue,
@@ -36,6 +37,8 @@ export type ReadAccess = {
   catering(): Promise<CateringEstimate | null>;
   activity(params: ActivityFeedParams): Promise<ActivityFeed | null>;
   exports(): Promise<ExportJobStatusModel | null>;
+  /** The planner's saved notes (add_note), newest first. */
+  notes(): Promise<WeddingNotes | null>;
   /** Members of the wedding, from the snapshot's People block when it has one. */
   members(): Promise<{ member_id: string; display_name: string; role: string; seed_key: string | null }[]>;
   vendors(): Promise<VendorRef[]>;
@@ -79,6 +82,7 @@ export function createReadAccess(
   const access: ReadAccess = {
     profile: () => read<WeddingProfile>("wedding_profile"),
     itinerary: () => read<Itinerary>("itinerary"),
+    notes: () => read<WeddingNotes>("wedding_notes"),
     money: () => read<MoneySummary>("money_summary"),
     async ledger(vendor_id) {
       const ledgers = data.vendor_ledgers ?? data.vendor_ledger;

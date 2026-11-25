@@ -343,6 +343,12 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
       }
       return { reply: reply(r, r === "en" ? "Saved the wedding details." : "Wedding details save ho gayi.", r === "en" ? undefined : "Wedding details save हो गईं।"), navigate_path: wedding_id ? routes.wedding(wedding_id) : null };
     }
+    case "add_note": {
+      const topic = String(input.topic ?? "");
+      if (r === "en") return { reply: reply(r, `Saved the note about ${topic}. I'll answer from it next time.`), navigate_path: null };
+      if (r === "hinglish") return { reply: reply(r, `${topic} ka note save ho gaya.`, `${topic} का note save हो गया।`), navigate_path: null };
+      return { reply: reply(r, `${topic} का नोट सेव हो गया।`), navigate_path: null };
+    }
     case "set_rsvp": {
       const path = wedding_id ? routes.guests(wedding_id, typeof input.event_id === "string" ? input.event_id : undefined) : null;
       const rsvp = rsvpReply(facts, typeof input.rsvp_status === "string" ? input.rsvp_status : facts.rsvp_status ?? null, r);
@@ -441,6 +447,7 @@ const NOUN: Partial<Record<CommandName, string>> = {
   create_event: "function",
   update_event: "change",
   add_requirement: "requirement",
+  add_note: "note",
   add_vendor: "vendor",
   add_guest: "guest",
   set_rsvp: "RSVP",

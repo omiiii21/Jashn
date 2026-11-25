@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { FIXTURE_TODAY, fixtureIds, fixtureSessionActor, type FixturePerson } from "@/contracts/fixtures";
-import type { ActivityFeed, Itinerary, MoneySummary } from "@/contracts/read-models";
+import type { ActivityFeed, Itinerary, MoneySummary, WeddingNotes } from "@/contracts/read-models";
 import { fixtureServices, type Services } from "@/contracts/services";
 
 import { confirmedReply, prefillFor, applyEdits } from "./confirm-reply";
@@ -456,7 +456,8 @@ describe("questions the plan doesn't answer", () => {
     const args = withReply(tool([], "ask"), "It will be sunny that day.");
     const out = await resolveTurn(await ctxFor(args, "What will the weather be on the wedding day?", { register: "en" }));
     if (out.kind !== "clarify") throw new Error("expected a question back");
-    expect(out.question.display_text).toBe("I don't have that in your plan yet, so I won't guess.");
+    expect(out.question.display_text).toBe("I don't have that in your plan yet, so I won't guess. Tell me and I'll save it as a note.");
+    expect(out.missing_fields).toEqual(["context"]);
   });
 
   it("a question the model calls clarify, with nothing missing, is still not guessed", async () => {
@@ -488,6 +489,60 @@ describe("questions the plan doesn't answer", () => {
     const stated = await resolveTurn(await ctxFor(withReply(tool([], "act", ["vendor_id"]), "DJ ka advance ho gaya."), "Advance de diya"));
     if (stated.kind !== "clarify") throw new Error("expected a question back");
     expect(stated.question.display_text).not.toContain("DJ");
+  });
+});
+
+describe("notes (add_note, query_note)", () => {
+  const PARKING = "Valet parking है, सौ गाड़ियों की";
+  const withNotes = servicesWith((name, value) => {
+    if (name !== "wedding_notes") return value;
+    const notes = value as WeddingNotes;
+    notes.notes = [
+      { note_id: "00000000-0000-4000-8000-0000000000a1", seed_key: null, topic: "parking", note_text: PARKING, created_at: "2026-11-25T12:00:00.000Z", created_by_name: "Mira" },
+    ];
+    return notes;
+  });
+
+  it("add_note is a review card with the topic and the words as said, then a short saved line", async () => {
+    const ctx = await ctxFor(tool([{ kind: "add_note", topic: "parking", note_text: PARKING }]), PARKING);
+    const out = await resolveTurn(ctx);
+    if (out.kind !== "preview") throw new Error(`expected a preview, got ${out.kind}`);
+    expect(out.button_label).toBe("Save note");
+    expect(out.confirm_enabled).toBe(true);
+    expect(out.actions[0].command).toBe("add_note");
+    expect(out.actions[0].input).toEqual({ topic: "parking", note_text: PARKING });
+    const built = await confirmedReply({ actor: ctx.actor, wedding_id: WEDDING, actions: out.actions, results: [{ index: 0, command: "add_note", outcome: "applied", idempotency_key: "t:0", entity_ref: null, activity_entry_id: null }], register: "en", partial: null });
+    expect(built.reply.display_text).toBe("Saved the note about parking. I'll answer from it next time.");
+    expect(built.navigate_path).toBeNull();
+  });
+
+  it("an add_note with no text asks for it", async () => {
+    const out = await resolveTurn(await ctxFor(tool([{ kind: "add_note", topic: "parking" }]), "Parking note kar lo"));
+    expect(out.kind).toBe("clarify");
+  });
+
+  it("the snapshot lists saved notes, and query_note answers with the note word for word", async () => {
+    const ctx = await ctxFor(tool([]), "Parking ka kya scene hai?", { services: withNotes });
+    expect(ctx.snapshot.text).toContain(`Notes the planner saved, newest first (reference | topic | text):\nNOTE-L1 | parking | ${PARKING}`);
+    const out = await resolveTurn({ ...ctx, tool: tool([{ kind: "query_note", note_id: "NOTE-L1" }], "ask") }, { services: withNotes });
+    if (out.kind !== "answer") throw new Error(`expected an answer, got ${out.kind}`);
+    expect(out.cards[0]).toEqual({ title: "Note: parking", figure: PARKING, link: null });
+    expect(out.reply.display_text).toBe(`Aapke notes mein: ${PARKING}`);
+  });
+
+  it("query_note finds a note by its topic when the reference is missing", async () => {
+    const ctx = await ctxFor(tool([{ kind: "query_note", topic: "Parking" }], "ask"), "Parking?", { services: withNotes, register: "en" });
+    const out = await resolveTurn(ctx, { services: withNotes });
+    if (out.kind !== "answer") throw new Error(`expected an answer, got ${out.kind}`);
+    expect(out.reply.display_text).toBe(`From your notes: ${PARKING}`);
+  });
+
+  it("query_note with no matching note says it isn't in the plan, never a guess", async () => {
+    const ctx = await ctxFor(tool([{ kind: "query_note", topic: "hotel" }], "ask"), "Which hotel?", { services: withNotes, register: "en" });
+    const out = await resolveTurn(ctx, { services: withNotes });
+    if (out.kind !== "answer") throw new Error(`expected an answer, got ${out.kind}`);
+    expect(out.cards).toEqual([]);
+    expect(out.reply).toEqual(fixedReply("no_context", "en"));
   });
 });
 

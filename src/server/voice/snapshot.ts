@@ -8,6 +8,7 @@ import type {
   ActivityFeed,
   CateringEstimate,
   ExportJobStatusModel,
+  WeddingNotes,
   Itinerary,
   ItineraryFunction,
   MoneySummary,
@@ -64,6 +65,7 @@ export type SnapshotData = {
   activity_feed?: ActivityFeed;
   catering_estimate?: CateringEstimate;
   export_job_status?: ExportJobStatusModel;
+  wedding_notes?: WeddingNotes;
   members?: SnapshotMember[];
   households?: SnapshotHousehold[];
   ref_by_id?: Record<string, string>;
@@ -87,6 +89,8 @@ export type SnapshotDeps = {
 /** Shagun by voice is Should #13, out today (D131). */
 const SHAGUN_IN_SNAPSHOT = false;
 const ACTIVITY_LIMIT = 10;
+/** The newest saved notes the model sees. */
+const NOTES_LIMIT = 20;
 export const ATTACHED_ASSET_REF = "ASSET-NEW";
 
 // ---------------------------------------------------------------------------
@@ -256,7 +260,7 @@ async function readAll(deps: SnapshotDeps, actor: SessionActor, wedding_id: Wedd
       ),
     );
 
-  const [wedding_profile, itinerary, money_summary, rsvp_guest_list, rsvp_totals, activity_feed, catering_estimate, export_job_status, members, households] =
+  const [wedding_profile, itinerary, money_summary, rsvp_guest_list, rsvp_totals, activity_feed, catering_estimate, export_job_status, wedding_notes, members, households] =
     await Promise.all([
       read("wedding_profile") as Promise<WeddingProfile | undefined>,
       read("itinerary") as Promise<Itinerary | undefined>,
@@ -266,6 +270,7 @@ async function readAll(deps: SnapshotDeps, actor: SessionActor, wedding_id: Wedd
       read("activity_feed", { limit: ACTIVITY_LIMIT }) as Promise<ActivityFeed | undefined>,
       read("catering_estimate") as Promise<CateringEstimate | undefined>,
       read("export_job_status") as Promise<ExportJobStatusModel | undefined>,
+      read("wedding_notes") as Promise<WeddingNotes | undefined>,
       readOrNull(read_errors, "members", () => deps.listMembers(wedding_id, actor)),
       readOrNull(read_errors, "households", () => deps.listHouseholds(wedding_id)),
     ]);
@@ -291,6 +296,7 @@ async function readAll(deps: SnapshotDeps, actor: SessionActor, wedding_id: Wedd
     activity_feed,
     catering_estimate,
     export_job_status,
+    wedding_notes,
     vendor_ledger,
     members: members ?? undefined,
     households: households ?? undefined,
@@ -431,6 +437,7 @@ export async function buildSnapshot(input: BuildInput, overrides?: Partial<Snaps
     activity_feed: reads.activity_feed,
     catering_estimate: reads.catering_estimate,
     export_job_status: reads.export_job_status,
+    wedding_notes: reads.wedding_notes,
     vendor_ledger: reads.vendor_ledger,
     members: reads.members,
   } satisfies SnapshotData);
@@ -625,6 +632,16 @@ export async function buildSnapshot(input: BuildInput, overrides?: Partial<Snaps
     lines.push("");
     lines.push("Requirements (reference | function | text):");
     lines.push(...requirementLines);
+  }
+
+  // Notes the planner saved (add_note): facts no other record holds, as saved.
+  const notes = (reads.wedding_notes?.notes ?? []).slice(0, NOTES_LIMIT);
+  if (notes.length > 0) {
+    lines.push("");
+    lines.push("Notes the planner saved, newest first (reference | topic | text):");
+    for (const note of notes) {
+      lines.push([refs.ref("NOTE", note.seed_key, note.note_id), sanitizeText(note.topic), sanitizeText(note.note_text)].join(" | "));
+    }
   }
 
   // Recent activity (already filtered to what the speaker may see, L5)

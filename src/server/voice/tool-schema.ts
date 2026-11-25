@@ -114,6 +114,10 @@ export const ACTION_FIELDS = {
   // requirements
   text: text(200, "add_requirement: what is needed, a short English phrase without the count."),
   requirement_category: oneOf(REQUIREMENT_CATEGORIES, "add_requirement: the requirement's category."),
+  // notes
+  topic: text(40, "add_note, query_note: a short topic in English, one or two words (parking, hotel, horse)."),
+  note_text: text(300, "add_note: the fact as the person said it, one short sentence. Never a phone number or an email."),
+  note_id: ref("query_note: a note reference from the snapshot (NOTE-...)."),
   // guests
   full_name: text(80, "add_guest: the guest's full name as said."),
   household_id: ref("add_guest, record_shagun: a household reference from the snapshot (H..)."),

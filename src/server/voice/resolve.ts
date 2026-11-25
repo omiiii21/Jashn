@@ -119,7 +119,8 @@ function nothingProposed(ctx: ResolveContext): ResolveOutcome {
     asksForContext ||
     intent === "ask" ||
     (intent === "clarify" && missing_fields.length === 0 && QUESTION_WORDS.test(ctx.transcript) && !REQUEST_WORDS.test(ctx.transcript));
-  if (unanswered) return clarify(fixedReply("no_context", r));
+  // "context" stays missing, so the next turn reads what the person says as the answer (add_note).
+  if (unanswered) return clarify(fixedReply("no_context", r), ["context"]);
   const fields = missing_fields.filter((field) => field !== "context");
   if (fields.length > 0 && isQuestionBack(ctx.tool.reply) && passesReplyGuard(ctx.tool.reply, r)) {
     return clarify(reply(r, ctx.tool.reply.trim()), fields);

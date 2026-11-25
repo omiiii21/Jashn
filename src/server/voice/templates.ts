@@ -87,18 +87,18 @@ const FIXED: Record<FixedReplyKey, Forms> = {
   },
   // A question nothing saved in the plan answers: say so, never a guess from nearby data.
   no_context: {
-    en: same("I don't have that in your plan yet, so I won't guess."),
+    en: same("I don't have that in your plan yet, so I won't guess. Tell me and I'll save it as a note."),
     hinglish: {
-      display: "Iski jaankari abhi aapke plan mein nahi hai, toh andaaza nahi lagaya.",
-      speech: "इसकी जानकारी अभी आपके plan में नहीं है, तो अंदाज़ा नहीं लगाया।",
+      display: "Iski jaankari abhi aapke plan mein nahi hai, toh andaaza nahi lagaya. Bata dijiye, note kar lete hain.",
+      speech: "इसकी जानकारी अभी आपके plan में नहीं है, तो अंदाज़ा नहीं लगाया। बता दीजिए, note कर लेते हैं।",
     },
-    hi: same("इसकी जानकारी अभी आपके प्लान में नहीं है, तो अंदाज़ा नहीं लगाया।"),
+    hi: same("इसकी जानकारी अभी आपके प्लान में नहीं है, तो अंदाज़ा नहीं लगाया। बता दीजिए, नोट कर लेते हैं।"),
   },
   // After an answer to the part of a question the plan holds.
   no_context_rest: {
-    en: same("The rest isn't in your plan yet, so I won't guess."),
-    hinglish: { display: "Baaki ki jaankari abhi plan mein nahi hai.", speech: "बाकी की जानकारी अभी plan में नहीं है।" },
-    hi: same("बाकी की जानकारी अभी प्लान में नहीं है।"),
+    en: same("The rest isn't in your plan yet. Tell me and I'll note it."),
+    hinglish: { display: "Baaki ki jaankari abhi plan mein nahi hai. Bata dijiye, note kar lete hain.", speech: "बाकी की जानकारी अभी plan में नहीं है। बता दीजिए, note कर लेते हैं।" },
+    hi: same("बाकी की जानकारी अभी प्लान में नहीं है। बता दीजिए, नोट कर लेते हैं।"),
   },
   too_many_actions: {
     en: same("One or two things at a time, please."),

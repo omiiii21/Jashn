@@ -154,6 +154,8 @@ const LABELS: Record<string, string> = {
   note: "Note",
   change_reason: "Reason",
   text: "What's needed",
+  topic: "Topic",
+  note_text: "Note",
   requirement_category: "Category",
   full_name: "Name",
   household_id: "Household",
@@ -1472,6 +1474,7 @@ const PASS_FIELDS: Record<string, string[]> = {
   add_guest: ["full_name", "household_id", "household_name", "relation", "event_ids", "max_plus_ones", "dietary_note"],
   set_rsvp: ["guest_ids", "event_id", "rsvp_status", "plus_ones"],
   set_dietary: ["guest_id", "dietary_note"],
+  add_note: ["topic", "note_text"],
 };
 
 const GENERIC_TITLES: Record<string, { title: string; button: string }> = {
@@ -1480,6 +1483,7 @@ const GENERIC_TITLES: Record<string, { title: string; button: string }> = {
   add_guest: { title: "Add guest", button: "Save guest" },
   set_rsvp: { title: "RSVP", button: "Save RSVP" },
   set_dietary: { title: "Dietary note", button: "Save" },
+  add_note: { title: "Save a note", button: "Save note" },
 };
 
 async function buildGeneric(ctx: ResolveContext, action: ToolAction, index: number, deps: WriteDeps): Promise<WriteResult> {
@@ -1547,7 +1551,7 @@ async function buildGeneric(ctx: ResolveContext, action: ToolAction, index: numb
   // A manager's add_guest limits are checked before this (1.11 step 2).
   const v = validateLikeTyping(command, input);
   if (!v.ok) {
-    const primary = command === "set_rsvp" ? ["guest_ids", "event_id", "rsvp_status"] : command === "set_dietary" ? ["guest_id", "dietary_note"] : command === "add_vendor" ? ["name", "vendor_category"] : command === "add_guest" ? ["full_name"] : [];
+    const primary = command === "set_rsvp" ? ["guest_ids", "event_id", "rsvp_status"] : command === "set_dietary" ? ["guest_id", "dietary_note"] : command === "add_vendor" ? ["name", "vendor_category"] : command === "add_guest" ? ["full_name"] : command === "add_note" ? ["topic", "note_text"] : [];
     if (primary.includes(v.field) || v.field === "") {
       return { kind: "clarify", action: { ...draft, input }, question: genericMissing(r), options: [], missing_fields: [`${index}:${v.field || "input"}`] };
     }
