@@ -3,7 +3,7 @@
 import "server-only";
 
 import type { CommandEnvelope, CommandResponse } from "@/contracts/commands";
-import { getSession, requireMember } from "@/server/auth/session";
+import { buildUserActor, getSignedInUser, loadMemberActor } from "@/server/auth/session";
 import { services } from "@/server/services";
 
 /**
@@ -11,14 +11,21 @@ import { services } from "@/server/services";
  * envelope and returns the response envelope. Server components pass it to client forms
  * as a prop; client components never import this file, and lanes never wrap it.
  *
- * Contracts stub: the actor comes from the session stub and the fixture services answer.
- * Lane A replaces the body at 10:45 with the real dispatcher (guard, receipts, after-commit).
+ * The actor comes from the session helper: the member of the envelope's wedding, or, for
+ * the `set_wedding_profile` create and `accept_member_invite` (no wedding yet), the
+ * signed-in user. The dispatcher then runs the guard, validation, receipts and the
+ * transaction. In fixture mode (no database or Supabase keys yet) the session helper
+ * returns the fixture member and the services answer from the fixtures.
  */
 export async function dispatchCommand(envelope: CommandEnvelope): Promise<CommandResponse> {
-  // Only the set_wedding_profile create has no wedding yet (domain 3.0).
-  const actor = envelope.wedding_id ? await requireMember(envelope.wedding_id) : await getSession();
+  const user = await getSignedInUser();
+  if (!user) return { ok: false, error: { code: "unauthenticated", message: "Sign in to continue.", field: null } };
+
+  const raw = (envelope ?? {}) as { wedding_id?: unknown };
+  const wedding_id = typeof raw.wedding_id === "string" && raw.wedding_id ? raw.wedding_id : null;
+  const actor = wedding_id ? await loadMemberActor(user, wedding_id) : await buildUserActor(user);
   if (!actor) {
-    return { ok: false, error: { code: "unauthenticated", message: "Sign in to continue." } };
+    return { ok: false, error: { code: "forbidden", message: "You are not a member of this wedding.", field: null } };
   }
   return services.dispatch(actor, envelope);
 }
