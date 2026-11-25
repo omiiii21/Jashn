@@ -157,11 +157,14 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
     let answers = baseline;
     let savedNotes = baselineNotes;
     let ok = true;
+    // A server answer moves the key on; a lost request keeps it, so the next tap retries the same request.
+    let answered = false;
     try {
       if (body.responses.length > 0) {
         const held = keyForBody(rsvpKey.current, body, responseSeq);
         rsvpKey.current = held;
         const result = await postJson(routes.api.guestRsvp(token), { idempotency_key: held.key, responses: body.responses });
+        if (result !== "network") answered = true;
         if (result !== "network" && result.body?.ok) {
           answers = storedAnswers(result.body.result);
           savedNotes = notesFrom(result.body.result.household.guests);
@@ -176,6 +179,7 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
           const held = keyForBody(dietaryKeys.current[guest.guest_id] ?? null, payload, responseSeq);
           dietaryKeys.current[guest.guest_id] = held;
           const result = await postJson(routes.api.guestDietary(token), { idempotency_key: held.key, ...payload });
+          if (result !== "network") answered = true;
           if (result !== "network" && result.body?.ok) {
             savedNotes = { ...savedNotes, [guest.guest_id]: payload.dietary_note };
           } else {
@@ -187,7 +191,7 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
       }
     } finally {
       setSending(false);
-      setResponseSeq((seq) => seq + 1);
+      if (answered) setResponseSeq((seq) => seq + 1);
     }
     setLatest({ basis: propsSignature, answers, notes: savedNotes });
     if (ok) {
