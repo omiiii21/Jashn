@@ -5,8 +5,17 @@ import { VOICE_OFF_TEXT, type VoiceDockFlags } from "@/contracts/flags";
 import { dispatchCommand } from "@/server/actions/dispatch";
 import { getSession } from "@/server/auth/session";
 import { dockFlags, getRenderFlags, isInternalUser } from "@/server/flags";
+import { buildDrawerSession } from "@/server/flags/drawer";
+import {
+  drawerLatestCheck,
+  drawerRunFullCheck,
+  drawerRunProbes,
+  drawerSentByJashn,
+  drawerVoiceTurnCounts,
+} from "@/server/flags/drawer-actions";
 import { FIXTURE_ROW_IDS, isFixtureMode } from "@/server/voice/fixture-mode";
 
+import type { FlagDrawerData } from "./drawer-types";
 import { VoiceDockClient } from "./VoiceDockClient";
 
 /**
@@ -52,9 +61,25 @@ export async function VoiceDock(props: VoiceDockProps) {
   if (!actor) return <DisabledMic />;
 
   let flags: VoiceDockFlags;
+  let drawer: FlagDrawerData | null = null;
+  const is_internal = isInternalUser(actor);
   try {
     const evaluation = await getRenderFlags(actor, props.wedding_id);
     flags = dockFlags(evaluation, actor);
+    // The flags drawer (flagsmith 5.9): internal accounts only. Part 1 comes from this same
+    // render evaluation; everyone else gets no drawer data at all, not even hidden.
+    if (is_internal) {
+      drawer = {
+        session: buildDrawerSession(evaluation),
+        actions: {
+          latestCheck: drawerLatestCheck,
+          runFullCheck: drawerRunFullCheck,
+          runProbes: drawerRunProbes,
+          sentByJashn: drawerSentByJashn,
+          voiceTurnCounts: drawerVoiceTurnCounts,
+        },
+      };
+    }
   } catch {
     // The evaluation never throws; if it somehow does, voice fails closed (D47).
     return <DisabledMic />;
@@ -73,8 +98,9 @@ export async function VoiceDock(props: VoiceDockProps) {
       fixture_mode={fixture_mode}
       fixture_rows={fixture_mode ? [...FIXTURE_ROW_IDS] : []}
       display_name={actor.display_name}
-      is_internal={isInternalUser(actor)}
+      is_internal={is_internal}
       dispatchCommand={dispatchCommand}
+      drawer={drawer}
     />
   );
 }
