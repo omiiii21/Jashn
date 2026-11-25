@@ -47,6 +47,30 @@ export async function signIn(_state: AuthFormState, form_data: FormData): Promis
 }
 
 /**
+ * "Try the demo": signs this browser in to the shared sample wedding (Mira & Kabir), so a visitor
+ * can look around without an account. The account and its password live only in server env vars
+ * (`DEMO_ACCOUNT_EMAIL`, `DEMO_ACCOUNT_PASSWORD`) and never reach the browser. It is a separate
+ * sample copy from the one used in live demos. In fixture mode everyone is the fixture member.
+ */
+export async function signInDemo(): Promise<void> {
+  if (!isLiveAuth()) redirect(routes.home());
+  const email = process.env.DEMO_ACCOUNT_EMAIL?.trim() ?? "";
+  const password = process.env.DEMO_ACCOUNT_PASSWORD ?? "";
+  let ok = false;
+  if (email && password) {
+    try {
+      const supabase = await createSupabaseServerClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      ok = !error;
+    } catch {
+      ok = false;
+    }
+  }
+  // Outside any try block: redirect throws (Next's redirect docs).
+  redirect(ok ? routes.home() : `${routes.login()}?demo=unavailable`);
+}
+
+/**
  * `useActionState` action: creates an owner account. "Confirm email" is off (D116), so the
  * session starts at once and the user goes to /setup (or to `next`, such as a join link).
  */

@@ -5,8 +5,9 @@ import { connection } from "next/server";
 
 import { AuthCard } from "@/components/auth/AuthCard";
 import { SignInForm } from "@/components/auth/AuthForm";
+import { TryDemoButton } from "@/components/auth/TryDemoButton";
 import { routes } from "@/contracts/routes";
-import { signIn } from "@/server/auth/actions";
+import { signIn, signInDemo } from "@/server/auth/actions";
 import { nextFromSearchParams, withNextParam, type PageSearchParams } from "@/server/auth/pages";
 import { getSignedInUser, isLiveAuth } from "@/server/auth/session";
 
@@ -17,7 +18,9 @@ type LoginPageProps = { searchParams: Promise<PageSearchParams> };
 /** Email and password sign-in (architecture 3.5, AT-8.1). A signed-in visitor goes straight home. */
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   await connection();
-  const next = nextFromSearchParams(await searchParams);
+  const params = await searchParams;
+  const next = nextFromSearchParams(params);
+  const demo_unavailable = params.demo === "unavailable";
   const live = isLiveAuth();
   if (live && (await getSignedInUser())) redirect(next ?? routes.home());
 
@@ -40,6 +43,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </p>
       )}
       <SignInForm action={signIn} next={next} />
+      <TryDemoButton action={signInDemo} unavailable={demo_unavailable} />
     </AuthCard>
   );
 }
