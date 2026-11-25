@@ -82,7 +82,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[8.5rem_1fr] gap-2 text-meta">
       <dt className="text-ink-3">{label}</dt>
-      <dd className="min-w-0 break-all text-ink">{children}</dd>
+      <dd className="min-w-0 break-words text-ink">{children}</dd>
     </div>
   );
 }
@@ -118,8 +118,8 @@ function FlagTable({ rows }: { rows: DrawerFlagRow[] }) {
                   {row.fallback ? <FallbackMark /> : null}
                 </span>
               </td>
-              <td className="py-1.5 pr-2 break-all text-ink-2">{row.variant ?? row.value ?? "–"}</td>
-              <td className="py-1.5 break-all text-ink-2">{row.reason ?? "–"}</td>
+              <td className="py-1.5 pr-2 break-words text-ink-2">{row.variant ?? row.value ?? "–"}</td>
+              <td className="py-1.5 break-words text-ink-2">{row.reason ?? "–"}</td>
             </tr>
           ))}
         </tbody>
@@ -288,7 +288,7 @@ function ProbeTable({ probes }: { probes: DrawerProbes }) {
                   </span>
                   {row.voice_pilot.fallback ? <span className="ml-1 text-due">({DRAWER_COPY.fallback})</span> : null}
                 </td>
-                <td className="px-2 py-1 break-all text-ink-2">{row.voice_pilot.reason ?? "–"}</td>
+                <td className="px-2 py-1 break-words text-ink-2">{row.voice_pilot.reason ?? "–"}</td>
                 <td className="px-2 py-1 text-ink-2">{row.setup_entry.variant ?? "–"}</td>
                 <td className="px-2 py-1 text-ink-2">
                   {row.setup_entry.in_experiment === null ? "–" : row.setup_entry.in_experiment ? "yes" : "no"}
@@ -434,7 +434,9 @@ export function FlagDrawer({
       <SheetContent
         side={desktop ? "right" : "bottom"}
         data-testid="flag-drawer"
-        className="gap-0 bg-paper p-0 text-ink data-[side=bottom]:max-h-[88dvh] data-[side=bottom]:rounded-t-xl data-[side=right]:w-full data-[side=right]:sm:max-w-lg"
+        // On the phone the sheet is anchored from the top with a fixed height, so it stays
+        // on screen even when something on the page widens the layout viewport.
+        className="gap-0 bg-paper p-0 text-ink data-[side=bottom]:top-[12dvh] data-[side=bottom]:bottom-auto data-[side=bottom]:h-[88dvh] data-[side=bottom]:w-screen data-[side=bottom]:max-w-[100vw] data-[side=bottom]:rounded-t-xl data-[side=right]:w-full data-[side=right]:sm:max-w-lg"
       >
         <SheetHeader className="border-b border-line pr-12">
           <SheetTitle className="text-heading text-ink">{DRAWER_COPY.title}</SheetTitle>
