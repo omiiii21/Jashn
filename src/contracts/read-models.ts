@@ -7,8 +7,8 @@
  * Every member read model returns `version`, and every row it returns carries `seed_key`
  * (null for live rows). The guest view and the ops view keep fixed field lists (D127).
  *
- * `team` and the household link fields (`link_status`, `last_rotated_at`) follow in
- * lane-lead-contracts-2 (D99).
+ * `team` (4.11) and the household link fields of `rsvp_guest_list` (4.4: `link_status`,
+ * `last_rotated_at`) came in lane-lead-contracts-2 (D99, D109), matching what Lane A returns.
  */
 import type {
   ActivityEntryId,
@@ -35,6 +35,7 @@ import type {
   JsonObject,
   JsonPrimitive,
   MemberId,
+  MemberInviteId,
   MemberRole,
   PaymentId,
   PaymentKind,
@@ -47,6 +48,7 @@ import type {
   RsvpStatus,
   SeedKey,
   ShagunEntryId,
+  SharingSettings,
   SnapshotEvent,
   VendorId,
   VendorStatus,
@@ -97,6 +99,42 @@ export type WeddingProfile = MemberReadModelBase & {
   is_sample: boolean;
   /** The current member. */
   member: { member_id: MemberId; role: MemberRole; display_name: string };
+};
+
+// ---------------------------------------------------------------------------
+// 4.11 team (D99, D109): owners only; a manager gets 403 `forbidden`
+// ---------------------------------------------------------------------------
+
+/** One active member (no `removed_at`): owners first, then by when they joined. */
+export type TeamMember = {
+  member_id: MemberId;
+  seed_key: SeedKey | null;
+  display_name: string;
+  role: MemberRole;
+  /** When the membership began (the `members` row's `created_at`). */
+  joined_at: IsoInstant;
+  /** True for the reader's own row, so the sheet can leave out "Remove" on it. */
+  is_you: boolean;
+};
+
+/** One pending invite: not accepted, not revoked and not yet expired at read time. */
+export type TeamPendingInvite = {
+  member_invite_id: MemberInviteId;
+  seed_key: SeedKey | null;
+  email: string;
+  role: MemberRole;
+  display_name: string | null;
+  invited_at: IsoInstant;
+  expires_at: IsoInstant;
+};
+
+/** Lane B's "Team and sharing" sheet. */
+export type TeamView = MemberReadModelBase & {
+  wedding_id: WeddingId;
+  members: TeamMember[];
+  pending_invites: TeamPendingInvite[];
+  /** The three `managers_can_see_*` flags (G7). */
+  sharing: SharingSettings;
 };
 
 // ---------------------------------------------------------------------------
@@ -256,8 +294,40 @@ export type RsvpGuestListFunction = {
   synthetic: (RsvpCounts & { label: string }) | null;
 };
 
+/** A household's guest link (4.4, D109): never rotated, live, or turned off. */
+export type HouseholdLinkStatus = "none" | "active" | "revoked";
+
+export type RsvpHouseholdGuest = {
+  guest_id: GuestId;
+  seed_key: SeedKey | null;
+  full_name: string;
+  group_label: string | null;
+  dietary_note: string | null;
+  /** Owners, and managers with `managers_can_see_guest_contacts`; otherwise left out. */
+  phone?: string | null;
+  email?: string | null;
+};
+
+export type RsvpGuestListHousehold = {
+  household_id: HouseholdId;
+  seed_key: SeedKey | null;
+  name: string;
+  relation: string | null;
+  is_synthetic: boolean;
+  guest_count: number;
+  guests: RsvpHouseholdGuest[];
+  link_status: HouseholdLinkStatus;
+  /** Null if the household's link was never rotated. */
+  last_rotated_at: IsoInstant | null;
+};
+
 export type RsvpGuestList = MemberReadModelBase & {
   functions: RsvpGuestListFunction[];
+  /**
+   * Every household with its link fields (4.4, D109), for the guest screens' link controls.
+   * Optional until every implementation returns it; a reader treats a missing list as empty.
+   */
+  households?: RsvpGuestListHousehold[];
 };
 
 // ---------------------------------------------------------------------------
@@ -666,6 +736,7 @@ export type NoParams = Record<string, never>;
 
 export type ReadModelMap = {
   wedding_profile: { params: NoParams; result: WeddingProfile };
+  team: { params: NoParams; result: TeamView };
   overview: { params: NoParams; result: Overview };
   money_summary: { params: NoParams; result: MoneySummary };
   vendor_ledger: { params: { vendor_id: VendorId }; result: VendorLedger };
@@ -686,6 +757,7 @@ export type ReadModelResult<N extends ReadModelName> = ReadModelMap[N]["result"]
 
 export const READ_MODEL_NAMES = [
   "wedding_profile",
+  "team",
   "overview",
   "money_summary",
   "vendor_ledger",
