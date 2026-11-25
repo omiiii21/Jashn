@@ -134,7 +134,8 @@ export function getRenderFlags(
   wedding_id: WeddingId | null,
   opts?: { ui_language?: AppLanguage },
 ): Promise<UserFlagEvaluation> {
-  const key = `${actor.user_id}|${wedding_id ?? "none"}|${opts?.ui_language ?? ""}`;
+  // The UI language defaults to the member's, as the traits do, so VoiceDock and the page share one entry.
+  const key = `${actor.user_id}|${wedding_id ?? "none"}|${opts?.ui_language ?? actor.preferred_language}`;
   let memo: Map<string, Promise<UserFlagEvaluation>> | null = null;
   try {
     memo = renderMemo();

@@ -107,3 +107,65 @@ test.describe("lane C: flags and voice routes", () => {
     expect(body.error.code).toBe("forbidden");
   });
 });
+
+test.describe("lane C: the setup screen", () => {
+  test("GET /setup renders the setup screen, or sends a signed-out visitor to /login", async ({ request }) => {
+    const response = await request.get("/setup", { maxRedirects: 0 });
+    if (response.status() >= 300 && response.status() < 400) {
+      expect(response.headers()["location"] ?? "").toMatch(/\/login/);
+      return;
+    }
+    expect(response.status()).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Set up your wedding");
+    // An arm is always assigned; fixture Mira is internal, so she is never exposed (FV13 b is a unit test).
+    expect(html).toMatch(/data-setup-arm="(voice_first|form_first)"/);
+    expect(html).not.toMatch(/ser\.[A-Za-z0-9]/);
+  });
+
+  test("the typed form checks the date and saves through the dispatcher", async ({ page }) => {
+    const response = await page.goto("/setup");
+    if (!page.url().includes("/setup")) {
+      expect(page.url()).toMatch(/\/login/);
+      return;
+    }
+    expect(response?.status()).toBe(200);
+    // Voice-first opens on the mic: "Type instead" reveals the same form.
+    const typeInstead = page.getByRole("button", { name: "Type instead" });
+    if (await typeInstead.isVisible()) await typeInstead.click();
+    await page.getByLabel("Bride").fill("Mira");
+    await page.getByLabel("Groom").fill("Kabir");
+    await page.getByLabel("Day").fill("14");
+    await page.getByLabel("Month").fill("12");
+    await page.getByRole("button", { name: "Save wedding" }).click();
+    // No year: never filled in, and nothing is sent (AT-1.4).
+    await expect(page.getByText("Add the full date: day, month and year.")).toBeVisible();
+    await page.getByLabel("Year").fill("2026");
+    await page.getByLabel("City").fill("Bengaluru");
+    await page.getByLabel("Budget (₹)").fill("12,00,000");
+    await page.getByLabel("Guests").fill("250");
+    await page.getByRole("button", { name: "Save wedding" }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith("/setup"), { timeout: 15_000 });
+    expect(new URL(page.url()).pathname).toMatch(/^\/(w\/.+)?$/);
+  });
+
+  test("a fixture setup turn (S-01) with no wedding streams a terminal event", async ({ request }) => {
+    const response = await request.post("/api/voice/turn", {
+      multipart: {
+        text: "x",
+        wedding_id: "",
+        client_turn_id: randomUUID(),
+        ui_language: "en",
+        setup_opened_at: new Date().toISOString(),
+        fixture_id: "S-01",
+      },
+    });
+    if (response.status() === 401 || response.status() === 403) return; // signed out, or voice off for this account
+    expect(response.status()).toBe(200);
+    const events = parseNdjson(await response.text());
+    expect(events[0]?.type).toBe("heard");
+    // Flagsmith on fallbacks: writes are refused early with the prefill (AT-1.6); else a draft preview.
+    const terminal = events.find((event) => event.type === "refused" || event.type === "preview");
+    expect(terminal).toBeTruthy();
+  });
+});
