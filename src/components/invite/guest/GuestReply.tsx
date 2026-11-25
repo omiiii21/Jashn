@@ -87,6 +87,7 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
   const copy = GUEST_COPY[lang];
   const router = useRouter();
   const hiLang = lang === "hi" ? undefined : "hi";
+  const enLang = lang === "hi" ? "en" : undefined;
 
   // The baseline is the view's stored answers and notes. A reply's result replaces it until
   // the next refresh brings new props (router.refresh keeps this state).
@@ -234,7 +235,9 @@ export function GuestReply({ token, lang, inserts, guests, thank_name, hindi_fon
           className="rounded-paper bg-invite-stock p-6 text-invite-ink shadow-insert"
         >
           <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="font-serif text-insert-title text-invite-name">{insert.title}</h2>
+            <h2 lang={enLang} className="font-serif text-insert-title text-invite-name">
+              {insert.title}
+            </h2>
             <p lang={hiLang} className={`${hindi_font} text-heading font-medium leading-normal text-invite-name`}>
               {insert.title_hi}
             </p>

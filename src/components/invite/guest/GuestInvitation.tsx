@@ -68,6 +68,8 @@ export function GuestInvitation({ token, lang, view, is_sample }: GuestInvitatio
   const copy = GUEST_COPY[lang];
   const wedding = view.wedding;
   const hiLang = lang === "hi" ? undefined : "hi";
+  // The page takes the reader's language; English parts inside a Hindi page say so (acceptance 6.5).
+  const enLang = lang === "hi" ? "en" : undefined;
   const hindiFont = wedding.typeface === "tiro_devanagari" ? "font-classic" : "font-serif";
   const names = `${wedding.bride_name} & ${wedding.groom_name}`;
   const { lead_in, follow_line } = splitWording(wedding.wording_en);
@@ -132,9 +134,19 @@ export function GuestInvitation({ token, lang, view, is_sample }: GuestInvitatio
             {wedding.heading_hi}
           </p>
           {blessing ? <p className="mt-3 text-body text-invite-blessing">{blessing}</p> : null}
-          {lead_in ? <p className="mt-6 whitespace-pre-line font-serif text-wording">{lead_in}</p> : null}
-          <h1 className="mt-4 font-serif text-names text-invite-name">{names}</h1>
-          {follow_line ? <p className="mt-4 whitespace-pre-line font-serif text-wording">{follow_line}</p> : null}
+          {lead_in ? (
+            <p lang={enLang} className="mt-6 whitespace-pre-line font-serif text-wording">
+              {lead_in}
+            </p>
+          ) : null}
+          <h1 lang={enLang} className="mt-4 font-serif text-names text-invite-name">
+            {names}
+          </h1>
+          {follow_line ? (
+            <p lang={enLang} className="mt-4 whitespace-pre-line font-serif text-wording">
+              {follow_line}
+            </p>
+          ) : null}
           {wordingHi ? (
             <p lang={hiLang} className={`mt-4 ${hindiFont} text-wording leading-loose text-invite-blessing`}>
               {wordingHi}
