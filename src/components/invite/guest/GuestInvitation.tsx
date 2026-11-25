@@ -5,6 +5,7 @@ import { splitWording } from "../card-model";
 import { GuestReply, type ReplyInsert } from "./GuestReply";
 import { GuestSeal } from "./GuestSeal";
 import { GUEST_COPY } from "./guest-copy";
+import { guestPhotoPath } from "./guest-wire";
 import {
   coupleInitials,
   directionsHref,
@@ -76,7 +77,8 @@ export function GuestInvitation({ token, lang, view, is_sample }: GuestInvitatio
   const blessing = wedding.blessing_line?.trim() ? wedding.blessing_line.trim() : null;
   const wordingHi = wedding.wording_hi?.trim() ? wedding.wording_hi.trim() : null;
   const dateLine = [names, formatWeddingDate(wedding.wedding_date, lang), wedding.city].filter(Boolean).join(" · ");
-  const photoUrl = typeof wedding.photo_url === "string" && /^https:\/\//i.test(wedding.photo_url) ? wedding.photo_url : null;
+  // Never the signed Storage URL itself: the image comes through the app's own origin.
+  const photoUrl = typeof wedding.photo_url === "string" && /^https:\/\//i.test(wedding.photo_url) ? guestPhotoPath(token, view.revision) : null;
   const inserts = [...view.functions].sort(startOrder).map((fn) => toInsert(fn, lang, wedding.city));
   const guests = view.household.guests.map((guest) => ({
     guest_id: guest.guest_id,

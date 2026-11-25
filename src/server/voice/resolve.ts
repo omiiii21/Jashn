@@ -26,6 +26,7 @@ import {
   totalNotShared,
   vendorPaymentsNotShared,
   weddingDetailsForbidden,
+  withoutRepeatedSentences,
 } from "./templates";
 import {
   ASK_KINDS,
@@ -191,7 +192,7 @@ export async function resolveTurn(input: ResolveContext, overrides: ResolveOverr
       code: refusals.some((item) => item.code === "forbidden") ? "forbidden" : "not_shared",
       reply: refusalReply(refusals, r, owners),
       prefill: [],
-      cards,
+      cards: uniqueCards(cards),
       actions: [],
     };
   }
@@ -215,7 +216,7 @@ export async function resolveTurn(input: ResolveContext, overrides: ResolveOverr
   const allActions = (): ResolvedAction[] =>
     actions.map((action, index) => writes.find((w) => w.index === index)?.result.action ?? askPlaceholder(action, index));
 
-  const answerCards = answers.flatMap((a) => (a.result.kind === "answer" ? a.result.cards : []));
+  const answerCards = uniqueCards(answers.flatMap((a) => (a.result.kind === "answer" ? a.result.cards : [])));
   const answerReplies = answers.filter((a) => a.result.kind === "answer").map((a) => (a.result as Extract<AnswerResult, { kind: "answer" }>).reply);
 
   // 9. Kill switch, the early check (questions are still answered, 4.3).
@@ -263,7 +264,7 @@ export async function resolveTurn(input: ResolveContext, overrides: ResolveOverr
       replyText = joinReplies(r, replies.slice(0, 2).map(firstSentenceOf));
       if (replies.length > 2) replyText = { ...replyText, display_text: `${replyText.display_text} ${r === "en" ? "Ask me the rest one at a time." : "Baaki ek-ek karke poochiye."}` };
     }
-    return { kind: "answer", cards: answerCards, reply: replyText };
+    return { kind: "answer", cards: answerCards, reply: withoutRepeatedSentences(replyText) };
   }
 
   const readyResults = ready.map((w) => w.result as Extract<WriteResult, { kind: "ready" }>);
@@ -287,6 +288,17 @@ export async function resolveTurn(input: ResolveContext, overrides: ResolveOverr
     disabled_reason: disabled,
     reply: replyText,
   };
+}
+
+/** The same card twice is one card (a second guard after the duplicate-action check). */
+function uniqueCards(cards: VoiceAnswerCard[]): VoiceAnswerCard[] {
+  const seen = new Set<string>();
+  return cards.filter((card) => {
+    const key = JSON.stringify([card.title, card.figure, card.link]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** Kinds that name one vendor, and the field that would name the record instead. */
@@ -419,6 +431,16 @@ async function fillRefsFromTranscript(ctx: ResolveContext, access: ReadAccess): 
   actions.forEach((_, index) => {
     if (!anyKept || keep[index]) newIndex.set(index, newIndex.size);
   });
+  // The same action twice (live, "Caterer ka kitna baaki hai?": query_balance VEN-CAT twice)
+  // is one action: one answer line, one card, never two payments for one sentence.
+  const seen = new Set<string>();
+  for (const [index, action] of actions.entries()) {
+    if (!newIndex.has(index)) continue;
+    const key = actionKey(action, ctx);
+    if (seen.has(key)) newIndex.delete(index);
+    else seen.add(key);
+  }
+  [...newIndex.keys()].forEach((index, position) => newIndex.set(index, position));
   const missing_fields = tool.missing_fields
     .filter((entry) => !filled.includes(entry))
     .flatMap((entry) => {
@@ -427,7 +449,43 @@ async function fillRefsFromTranscript(ctx: ResolveContext, access: ReadAccess): 
       const moved = newIndex.get(Number(match[1]));
       return moved === undefined ? [] : [`${moved}:${match[2]}`];
     });
-  return { ...tool, actions: actions.filter((_, index) => newIndex.has(index)), missing_fields };
+  return { ...tool, actions: actions.filter((_, index) => newIndex.has(index)), missing_fields: [...new Set(missing_fields)] };
+}
+
+/** Fields that never make two actions different: what was heard, and how sure the model was. */
+const KEY_IGNORED_FIELDS = new Set(["heard", "confidence"]);
+
+/**
+ * An action's identity: its kind and its input after reference mapping (a seed key, a
+ * `{PREFIX}-L{n}` reference and the UUID they stand for are the same record), with empty
+ * fields dropped, strings trimmed and lower-cased, and lists sorted.
+ */
+export function actionKey(action: ToolAction, ctx: Pick<ResolveContext, "snapshot">): string {
+  const refMap = ctx.snapshot.ref_map ?? {};
+  const norm = (value: unknown): unknown => {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return (refMap[trimmed] ?? trimmed).toLowerCase();
+    }
+    if (Array.isArray(value)) return value.map(norm).map((item) => JSON.stringify(item)).sort();
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .filter(([, v]) => v !== undefined && v !== null && v !== "")
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([k, v]) => [k, norm(v)]),
+      );
+    }
+    return value;
+  };
+  const fields: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(action)) {
+    if (KEY_IGNORED_FIELDS.has(field) || value === undefined || value === null || value === "") continue;
+    fields[field] = value;
+  }
+  // A vendor's balance with no scope is that vendor's balance.
+  if (action.kind === "query_balance" && fields.scope === undefined && said(fields.vendor_id)) fields.scope = "vendor";
+  return JSON.stringify(norm(fields));
 }
 
 /** Ask kinds the person has to name: without one of these words the model made the question up. */

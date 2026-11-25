@@ -3,7 +3,7 @@ import "server-only";
 import type { ReplyRegister, VoicePreviewField } from "@/contracts/api";
 import { commandSchemas, setWeddingProfileCreateSchema, type CommandName } from "@/contracts/commands";
 import { BUDGET_CATEGORY_LABELS, PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS, type JsonObject, type PaymentKind } from "@/contracts/domain";
-import type { Itinerary, PaymentView, VendorLedger } from "@/contracts/read-models";
+import type { Itinerary, PaymentView, RsvpGuestList, RsvpGuestRow, VendorLedger } from "@/contracts/read-models";
 
 import { functionList, functionOptions, refOf } from "./answers";
 import { readDate } from "./numbers";
@@ -16,6 +16,7 @@ import {
   formatLongDate,
   formatShortDate,
   formatTime,
+  formatWeekdayDateHi,
   hasWords,
   heardFor,
   modelMissing,
@@ -30,6 +31,7 @@ import {
   type ValueCheck,
   type VendorRef,
 } from "./resolve/support";
+import { dateSpeech } from "./speech";
 import { reply } from "./templates";
 import type { ReplyText, ResolveContext, ResolvedAction, StoredOption, ToolAction } from "./types";
 
@@ -65,6 +67,10 @@ export type ServerFacts = {
   /** update_event: the function a time change stops clashing with (4.10 E-03). */
   clash_cleared_with?: string;
   clash_cleared_with_hi?: string;
+  /** set_rsvp: the guests' names as stored, the new status, and the function's count after saving (4.10 G-02). */
+  guest_names?: string[];
+  rsvp_status?: string;
+  attending_after?: number;
   /** update_commitment: how far the budget line goes over, and its label (4.10 M-08). */
   over_budget_inr?: number;
   over_budget_label_en?: string;
@@ -937,8 +943,16 @@ async function buildUpdateEvent(ctx: ResolveContext, action: ToolAction, index: 
           r === "en"
             ? reply(r, `Do you mean ${read.relative}, ${dShort}? The ${fn.title.toLowerCase()} is on ${currentShort}${daypart.en ? ` ${daypart.en}` : ""}, so which date should I use?`)
             : r === "hinglish"
-              ? reply(r, `${capitalize(word)} matlab ${dShort}? ${fn.title} abhi ${currentShort}${daypart.hl ? ` ${daypart.hl}` : ""} hai, kaunsi tareekh rakhun?`, `${word} मतलब ${dShort}? ${fn.title} अभी ${currentShort}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`)
-              : reply(r, `कल यानी ${dShort}? ${fn.title_hi} अभी ${currentShort}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`);
+              ? reply(
+                  r,
+                  `${capitalize(word)} matlab ${dShort}? ${fn.title} abhi ${currentShort}${daypart.hl ? ` ${daypart.hl}` : ""} hai, kaunsi tareekh rakhun?`,
+                  `${relativeWordSpeech(word)} मतलब ${dateSpeech(resolvedDate, "hinglish")}? ${fn.title} अभी ${dateSpeech(fn.event_date, "hinglish")}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`,
+                )
+              : reply(
+                  r,
+                  `कल यानी ${shortDateHi(resolvedDate)}? ${fn.title_hi} अभी ${shortDateHi(fn.event_date)}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`,
+                  `कल यानी ${dateSpeech(resolvedDate, "hi")}? ${fn.title_hi} अभी ${dateSpeech(fn.event_date, "hi")}${daypart.hi ? ` ${daypart.hi}` : ""} है, कौन सी तारीख़ रखूँ?`,
+                );
         return {
           kind: "clarify",
           action: draft,
@@ -1068,7 +1082,12 @@ async function buildCreateEvent(ctx: ResolveContext, action: ToolAction, index: 
     return {
       kind: "clarify",
       action: draft,
-      question: r === "en" ? reply(r, `Do you mean ${read.relative}, ${formatLongDate(resolvedDate, false)}?`) : reply(r, `${capitalize(phrase ?? "kal")} matlab ${formatLongDate(resolvedDate, false)}?`, `${phrase ?? "कल"} मतलब ${formatLongDate(resolvedDate, false)}?`),
+      question:
+        r === "en"
+          ? reply(r, `Do you mean ${read.relative}, ${formatLongDate(resolvedDate, false)}?`)
+          : r === "hinglish"
+            ? reply(r, `${capitalize(phrase ?? "kal")} matlab ${formatLongDate(resolvedDate, false)}?`, `${relativeWordSpeech(phrase ?? "kal")} मतलब ${dateSpeech(resolvedDate, "hinglish")}?`)
+            : reply(r, `कल यानी ${shortDateHi(resolvedDate)}?`, `कल यानी ${dateSpeech(resolvedDate, "hi")}?`),
       options: [{ label: formatLongDate(resolvedDate, false), value: "o1", default: true, apply: [{ action_index: index, field: "event_date", value: resolvedDate }, { action_index: index, field: "__date_confirmed", value: true }] }],
       missing_fields: [`${index}:event_date`],
     };
@@ -1540,8 +1559,108 @@ async function buildGeneric(ctx: ResolveContext, action: ToolAction, index: numb
 }
 
 // ---------------------------------------------------------------------------
+// set_rsvp (G-02): guests named as stored, the function's counts after saving
+// ---------------------------------------------------------------------------
+
+const RSVP_STATUS_LABEL: Record<string, string> = { attending: "Attending", declined: "Declined", pending: "Not replied" };
+
+function guestsById(list: RsvpGuestList | undefined): Map<string, RsvpGuestRow> {
+  const rows = new Map<string, RsvpGuestRow>();
+  for (const fn of list?.functions ?? []) for (const guest of fn.guests) if (!rows.has(guest.guest_id)) rows.set(guest.guest_id, guest);
+  return rows;
+}
+
+/** A guest the model named by name instead of by reference: the full name, or a unique first name. */
+function guestRefByName(ctx: ResolveContext, list: RsvpGuestList | undefined, name: string): string | null {
+  const wanted = normalizeForMatch(name);
+  if (!wanted) return null;
+  const all = [...guestsById(list).values()];
+  let hits = all.filter((guest) => normalizeForMatch(guest.full_name) === wanted);
+  if (hits.length === 0) hits = all.filter((guest) => normalizeForMatch(guest.full_name.split(" ")[0] ?? "") === wanted);
+  if (hits.length !== 1) return null;
+  const guest = hits[0];
+  const refById = (ctx.snapshot.data as { ref_by_id?: Record<string, string> }).ref_by_id ?? {};
+  const ref = refById[guest.guest_id] ?? guest.seed_key;
+  return ref && ctx.snapshot.ref_map[ref] ? ref : null;
+}
+
+async function buildSetRsvp(ctx: ResolveContext, action: ToolAction, index: number, deps: WriteDeps): Promise<WriteResult> {
+  const list = (ctx.snapshot.data as { rsvp_guest_list?: RsvpGuestList }).rsvp_guest_list;
+  const named = Array.isArray(action.guest_ids)
+    ? action.guest_ids.map((item) => (typeof item === "string" && !ctx.snapshot.ref_map[item] ? (guestRefByName(ctx, list, item) ?? item) : item))
+    : action.guest_ids;
+  const base = await buildGeneric(ctx, { ...action, guest_ids: named }, index, deps);
+  if (base.kind !== "ready") return base;
+  const input = base.action.input;
+  const guestIds = Array.isArray(input.guest_ids) ? input.guest_ids.filter((id): id is string => typeof id === "string") : [];
+  const eventId = typeof input.event_id === "string" ? input.event_id : null;
+  const status = typeof input.rsvp_status === "string" ? input.rsvp_status : null;
+  const fn = list?.functions.find((row) => row.event_id === eventId) ?? null;
+  const everyone = guestsById(list);
+  const rows = guestIds.map((id) => fn?.guests.find((guest) => guest.guest_id === id) ?? everyone.get(id) ?? null);
+  const names = rows.length > 0 && rows.every((row) => row !== null) ? (rows as RsvpGuestRow[]).map((row) => row.full_name) : null;
+  // The card names the guests as stored, never by reference.
+  const fields = base.action.preview.fields.map((f) => (f.field === "guest_ids" && names ? { ...f, new: names.join(", ") } : f));
+
+  const totals = eventId ? await deps.access.rsvp(eventId).catch(() => null) : null;
+  const counts = totals?.functions.find((row) => row.event_id === eventId) ?? null;
+  const after_saving: { label: string; old: string; new: string }[] = [];
+  let attendingAfter: number | undefined;
+  const current = fn ? guestIds.map((id) => fn.guests.find((guest) => guest.guest_id === id)?.rsvp_status ?? null) : [];
+  if (counts && status && fn && current.length > 0 && current.every((was) => was !== null)) {
+    const change = (kind: string) => (status === kind ? current.filter((was) => was !== kind).length : -current.filter((was) => was === kind).length);
+    attendingAfter = counts.attending + change("attending");
+    after_saving.push({ label: "Attending", old: String(counts.attending), new: String(attendingAfter) });
+    after_saving.push({ label: "Not replied", old: String(counts.pending), new: String(counts.pending + change("pending")) });
+    // Everyone already has that answer (4, set_rsvp): no card.
+    if (current.every((was) => was === status)) {
+      const already =
+        ctx.register === "en"
+          ? reply("en", `They're already marked ${(RSVP_STATUS_LABEL[status] ?? status).toLowerCase()}.`)
+          : ctx.register === "hinglish"
+            ? reply("hinglish", "Unka jawab pehle se yahi likha hai.", "उनका जवाब पहले से यही लिखा है।")
+            : reply("hi", "उनका जवाब पहले से यही लिखा है।");
+      return { kind: "answer", reply: already, action: base.action };
+    }
+  }
+  const facts: ServerFacts = {
+    ...factsOf(base.action),
+    ...(eventId ? { event_id: eventId } : {}),
+    ...(fn ? { event_title: fn.title, event_title_hi: fn.title_hi } : {}),
+    ...(names ? { guest_names: names } : {}),
+    ...(status ? { rsvp_status: status } : {}),
+    ...(attendingAfter !== undefined ? { attending_after: attendingAfter } : {}),
+  };
+  const raw = { ...base.action.raw, [SERVER_FACTS_KEY]: facts } as ToolAction;
+  const fnTitle = (fn?.title ?? "").toLowerCase();
+  const cardTitle = names && fnTitle && status ? `RSVP for the ${fnTitle}: ${names.join(", ")} → ${RSVP_STATUS_LABEL[status] ?? status}` : base.title;
+  return {
+    ...base,
+    title: cardTitle,
+    summary: `${cardTitle}.`,
+    action: { ...base.action, raw, preview: { ...base.action.preview, fields, after_saving } },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The entry point
 // ---------------------------------------------------------------------------
+
+/** "26 नवंबर": a short date in Hindi display (4.10 E-08). */
+function shortDateHi(date: string): string {
+  return formatWeekdayDateHi(date).split(", ")[1] ?? date;
+}
+
+/** Relative day words said in Latin, in Devanagari for Hindi speech ("kal" → "कल", 3.5, E-08). */
+const RELATIVE_WORDS_HI: Record<string, string> = { kal: "कल", aaj: "आज", aj: "आज", parso: "परसों", parson: "परसों", parsoon: "परसों", subah: "सुबह", shaam: "शाम", sham: "शाम", raat: "रात", dopahar: "दोपहर", agle: "अगले", hafte: "हफ़्ते", ko: "को" };
+
+function relativeWordSpeech(phrase: string): string {
+  return phrase
+    .trim()
+    .split(/\s+/)
+    .map((word) => RELATIVE_WORDS_HI[word.toLowerCase()] ?? word)
+    .join(" ");
+}
 
 export async function previewWrite(ctx: ResolveContext, action: ToolAction, index: number, deps: WriteDeps): Promise<WriteResult> {
   switch (action.kind) {
@@ -1565,6 +1684,8 @@ export async function previewWrite(ctx: ResolveContext, action: ToolAction, inde
       return buildExport(ctx, action, index, deps);
     case "set_wedding_profile":
       return buildWeddingProfile(ctx, action, index);
+    case "set_rsvp":
+      return buildSetRsvp(ctx, action, index, deps);
     default:
       return buildGeneric(ctx, action, index, deps);
   }

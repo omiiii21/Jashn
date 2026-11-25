@@ -20,6 +20,7 @@ import { buildRsvpTotals } from "@/server/read-models/rsvp-totals";
 import { buildTeam } from "@/server/read-models/team";
 import { buildVendorLedger } from "@/server/read-models/vendor-ledger";
 import { resolveGuestToken } from "@/server/authz/guest-token";
+import { signUploadForMember } from "@/server/storage/uploads";
 
 /**
  * The services every lane calls (architecture 4.2 rule 3, 4.3). Real when the database and
@@ -115,7 +116,7 @@ const realServices: Services = {
     const guest = await resolveGuestToken(token);
     return guest ? readGuestRevision(getDb(), guest) : null;
   },
-  signUpload: (actor, request) => fixtureServices.signUpload(actor, request),
+  signUpload: (actor, request) => signUploadForMember(actor, request),
 };
 
 function current(): Services {
