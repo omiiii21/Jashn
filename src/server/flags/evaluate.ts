@@ -58,6 +58,13 @@ function stringValue(value: unknown): string | null {
 }
 
 function fromSdk(flag: SdkFlagLike | undefined, key: FlagKey, internal: boolean): EvaluatedFlag {
+  // Temporary default until voice_writes_enabled is created in Flagsmith (lead, 16:00): when
+  // Flagsmith answered (this function only runs on an ok result) but has no such flag, voice
+  // writes are on. Unreachable, no key, an error or a timeout still give the fallback (off), and
+  // a flag that exists answers for itself, on or off. Remove once the flag exists everywhere.
+  if (key === "voice_writes_enabled" && (!flag || flag.isDefault)) {
+    return { enabled: true, value: null, fallback: false, reason: null, variant: null, experiment: null };
+  }
   if (!flag || flag.isDefault) return { ...fallbackFlag(key, internal), reason: null, variant: null, experiment: null };
   return {
     enabled: !!flag.enabled,

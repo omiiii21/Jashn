@@ -237,9 +237,39 @@ describe("voiceGate (fails closed, D47)", () => {
     await expect(voiceGate("record_payment")).resolves.toEqual({ status: "enabled" });
   });
 
-  it("answers paused/unreadable when the flag is missing", async () => {
+  it("answers enabled when Flagsmith answered but the flag isn't created yet (temporary default)", async () => {
     installClient({ env: async () => healthyFlags({ voice_writes_enabled: undefined }) });
+    await expect(voiceGate("record_payment")).resolves.toEqual({ status: "enabled" });
+  });
+
+  it("answers enabled when the answered flag is a default-handler flag (temporary default)", async () => {
+    installClient({ env: async () => healthyFlags({ voice_writes_enabled: { enabled: false, value: null, isDefault: true } }) });
+    await expect(voiceGate("record_payment")).resolves.toEqual({ status: "enabled" });
+  });
+
+  it("still answers paused/unreadable when Flagsmith answers with nothing (unreachable)", async () => {
+    installClient({ env: async () => ({ flags: {} }) });
     await expect(voiceGate("record_payment")).resolves.toEqual({ status: "paused", cause: "unreadable" });
+  });
+
+  it("gives the dock and the turn record the same answer as the gate for a missing flag", async () => {
+    installClient({
+      env: async () => healthyFlags({ voice_writes_enabled: undefined }),
+      identity: async () => healthyFlags({ voice_writes_enabled: undefined }),
+    });
+    const evaluation = await evaluateUserFlags(internalActor);
+    expect(evaluation.flags.voice_writes_enabled).toMatchObject({ enabled: true, fallback: false });
+    expect(dockFlags(evaluation, internalActor).writes_enabled).toBe(true);
+    expect(voiceFlagsRecord(evaluation).voice_writes_enabled).toBe(true);
+    await expect(voiceGate("record_payment")).resolves.toEqual({ status: "enabled" });
+  });
+
+  it("keeps the other flags' fallbacks when they are missing from an answer", async () => {
+    installClient({ env: async () => healthyFlags({ voice_writes_enabled: undefined, card_renderer: undefined, voice_pilot: undefined }) });
+    const flags = await readEnvironmentFlags();
+    expect(flags.card_renderer).toEqual({ enabled: true, value: "chromium", fallback: true });
+    expect(flags.voice_pilot).toEqual({ enabled: false, value: null, fallback: true });
+    expect(flags.voice_writes_enabled).toEqual({ enabled: true, value: null, fallback: false });
   });
 
   it("never throws when the client throws", async () => {
