@@ -9,6 +9,8 @@ import { assertReadModelAccess, loadSharing } from "@/server/authz/guard";
 import { runCommand } from "@/server/commands/dispatcher";
 import { handlerFor } from "@/server/commands/registry";
 import { buildWeddingProfile, export_job_status } from "@/server/read-models";
+import { buildActivityFeed } from "@/server/read-models/activity-feed";
+import { buildItinerary } from "@/server/read-models/itinerary";
 
 /**
  * The services every lane calls (architecture 4.2 rule 3, 4.3). Real when the database and
@@ -51,6 +53,14 @@ const realServices: Services = {
         await guardedSharing(name, request.actor, request.wedding_id);
         const actor = { ...request.actor, wedding_id: request.wedding_id };
         return (await export_job_status(actor, params as ReadModelParams<"export_job_status">)) as ReadModelResult<N>;
+      }
+      case "itinerary": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildItinerary(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "activity_feed": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildActivityFeed(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
       }
       default:
         // Seeded ids equal the fixture ids (D100), so a fixture read of a real wedding still
