@@ -161,3 +161,171 @@ test.describe("render probe", () => {
     await expect(page.locator("meta[name=robots]")).toHaveAttribute("content", /noindex/);
   });
 });
+
+/**
+ * The guest site (domain 4.6, 7.3; acceptance AT-4.1 to AT-4.9, AT-9.4, AT-9.5), on the
+ * phone project at 390 × 844 with touch. Before the 14:45 merge it runs on the fixture
+ * services with Tara's fixture link. On copy d, set E2E_GUEST_TOKEN (never committed);
+ * traces then hold that token, so keep them local (acceptance 8.2 item 3).
+ * AT-9.5's same-origin check ignores the dev server's `/_next/webpack-hmr` socket.
+ */
+test.describe("guest site", () => {
+  test.skip(({ isMobile }) => !isMobile, "the guest page is checked on the phone project");
+
+  const FIXTURE_TOKEN = `fixture-tara-h16-${"A".repeat(26)}`;
+  const GUEST_TOKEN = process.env.E2E_GUEST_TOKEN ?? FIXTURE_TOKEN;
+  const SITE = `/i/${GUEST_TOKEN}`;
+  const BAD_TOKEN = `fixture-tara-h16-${"B".repeat(26)}`;
+
+  type Sent = { url: string; body: Record<string, unknown> };
+
+  function collectPosts(page: import("@playwright/test").Page, path: string): Sent[] {
+    const sent: Sent[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST" && request.url().includes(path)) {
+        sent.push({ url: request.url(), body: JSON.parse(request.postData() ?? "{}") });
+      }
+    });
+    return sent;
+  }
+
+  test("AT-4.1: exactly two inserts, Sangeet then Reception, and nothing private", async ({ page }) => {
+    const response = await page.goto(SITE);
+    expect(response?.status()).toBe(200);
+    const inserts = page.locator("[data-insert]");
+    await expect(inserts).toHaveCount(2);
+    await expect(inserts.nth(0).locator("h2")).toHaveText("Sangeet");
+    await expect(inserts.nth(1).locator("h2")).toHaveText("Reception");
+
+    const sangeet = (await inserts.nth(0).innerText()).replace(/\s+/g, " ");
+    for (const expected of ["संगीत", "Sun 13 Dec 2026, 7:00 pm", "Garden Hall, Mallige Gardens, Whitefield", "Indo-western, some sparkle", "Directions"]) {
+      expect(sangeet).toContain(expected);
+    }
+    const reception = (await inserts.nth(1).innerText()).replace(/\s+/g, " ");
+    for (const expected of ["रिसेप्शन", "Mon 14 Dec 2026, 7:30 pm", "Mallige Gardens, Whitefield", "Formal evening", "Dinner follows."]) {
+      expect(reception).toContain(expected);
+    }
+
+    const text = (await page.locator("main").innerText()).replace(/\s+/g, " ");
+    for (const expected of [
+      "शुभ विवाह",
+      "With the blessings of our families",
+      "Mira & Kabir",
+      "invite you to celebrate their wedding",
+      "Mira & Kabir · 14 December 2026 · Bengaluru",
+      "Fictional demo data",
+      "Yes, attending",
+      "Can't come",
+      "Food preferences (optional)",
+      "Send reply to the families",
+      "You can change your reply later from this link.",
+    ]) {
+      expect(text).toContain(expected);
+    }
+    for (const banned of ["₹", "Mehendi", "मेहंदी", "Haldi", "हल्दी", "Lotus Hall", "Annapoorna", "Nikhil", "celebrations"]) {
+      expect(text).not.toContain(banned);
+    }
+    await expect(page.locator("[data-insert] h2", { hasText: "Wedding" })).toHaveCount(0);
+
+    for (const choice of await page.locator("[data-rsvp-choice]").all()) {
+      expect((await choice.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(48);
+    }
+    const directions = page.getByRole("link", { name: "Directions" });
+    await expect(directions).toHaveCount(2);
+    for (const link of await directions.all()) {
+      await expect(link).toHaveAttribute("rel", /noreferrer/);
+      await expect(link).toHaveAttribute("target", "_blank");
+    }
+    // No horizontal scroll at 390 px (acceptance 6.4).
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
+
+  test("AT-4.1: the हिंदी toggle switches the strings and marks the page Hindi", async ({ page }) => {
+    await page.goto(SITE);
+    await page.getByRole("link", { name: "हिंदी" }).click();
+    await expect(page).toHaveURL(/\?lang=hi$/);
+    await expect(page.locator("main[lang=hi]")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "परिवारों को जवाब भेजें" })).toBeVisible();
+    await expect(page.getByText("हाँ, आएँगे").first()).toBeVisible();
+    await page.getByRole("link", { name: "English" }).click();
+    await expect(page.locator("main[lang=en]")).toHaveCount(1);
+  });
+
+  test("AT-4.2 / AT-4.3: a double tap sends the same key twice and the second is replayed", async ({ page }) => {
+    await page.goto(SITE);
+    const sent = collectPosts(page, "/rsvp");
+    const outcomes: string[] = [];
+    page.on("response", async (response) => {
+      if (response.request().method() === "POST" && response.url().includes("/rsvp")) {
+        outcomes.push(((await response.json()) as { outcome?: string }).outcome ?? `status ${response.status()}`);
+      }
+    });
+
+    const reception = page.locator("[data-insert]").nth(1);
+    await reception.locator('[data-rsvp-choice="attending"]').tap();
+    await expect(reception.getByRole("radio", { name: "Yes, attending" })).toBeChecked();
+    await page.getByRole("button", { name: "Send reply to the families" }).dblclick();
+
+    await expect(page.getByText("Thank you, Tara. The families have your reply")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Change reply" })).toBeVisible();
+    await expect.poll(() => outcomes.length).toBe(2);
+
+    expect(sent).toHaveLength(2);
+    expect(sent[0].body.idempotency_key).toEqual(sent[1].body.idempotency_key);
+    expect(sent[0].body).toEqual(sent[1].body);
+    const responses = sent[0].body.responses as Record<string, unknown>[];
+    expect(responses).toHaveLength(1);
+    expect(responses[0]).toMatchObject({ rsvp_status: "attending", plus_ones: 0 });
+    expect(Object.keys(responses[0]).sort()).toEqual(["event_id", "guest_id", "plus_ones", "rsvp_status"]);
+    expect([...outcomes].sort()).toEqual(["applied", "replayed"]);
+  });
+
+  test("AT-4.9: a food preference sends a dietary request", async ({ page }) => {
+    await page.goto(SITE);
+    const sent = collectPosts(page, "/dietary");
+    await page.getByRole("textbox", { name: "Food preferences (optional)" }).fill("Mushroom allergy");
+    await page.getByRole("button", { name: "Send reply to the families" }).tap();
+    await expect(page.getByText("Thank you, Tara.")).toBeVisible();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].body.dietary_note).toBe("Mushroom allergy");
+    expect(typeof sent[0].body.idempotency_key).toBe("string");
+  });
+
+  test("AT-9.4: every bad token gets the 404, and the API bodies are identical", async ({ page, request }) => {
+    for (const token of [BAD_TOKEN, "A".repeat(42), "abc%25def"]) {
+      expect((await page.goto(`/i/${token}`))?.status(), token).toBe(404);
+    }
+    const bodies: string[] = [];
+    for (const token of [BAD_TOKEN, "A".repeat(42)]) {
+      const revision = await request.get(`/api/i/${token}/revision`);
+      expect(revision.status()).toBe(404);
+      bodies.push(await revision.text());
+      const rsvp = await request.post(`/api/i/${token}/rsvp`, { data: { idempotency_key: "e2e-bad-token-key", responses: [] } });
+      expect(rsvp.status()).toBe(404);
+      bodies.push(await rsvp.text());
+    }
+    expect(new Set(bodies).size).toBe(1);
+    expect(JSON.parse(bodies[0])).toEqual({ ok: false, error: { code: "not_found", message: "This page could not be found." } });
+  });
+
+  test("AT-9.5: privacy headers, no cookies, and only same-origin requests", async ({ page, request }) => {
+    const origin = new URL(BASE_URL).origin;
+    const foreign: string[] = [];
+    page.on("request", (req) => {
+      const url = req.url();
+      if (url.startsWith("data:") || url.includes("/_next/webpack-hmr")) return;
+      if (new URL(url).origin !== origin) foreign.push(new URL(url).origin);
+    });
+    const pageResponse = await page.goto(SITE);
+    await page.waitForLoadState("networkidle");
+    const apiResponse = await request.get(`/api/i/${GUEST_TOKEN}/revision`);
+    for (const headers of [pageResponse?.headers() ?? {}, apiResponse.headers()]) {
+      expect(headers["referrer-policy"]).toBe("no-referrer");
+      expect(headers["x-robots-tag"]).toContain("noindex");
+      expect(headers["cache-control"]).toContain("no-store");
+      expect(headers["set-cookie"]).toBeUndefined();
+    }
+    expect(foreign).toEqual([]);
+    expect(await page.context().cookies()).toEqual([]);
+  });
+});
