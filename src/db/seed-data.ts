@@ -58,9 +58,37 @@ export type SeedDataset = {
    * when missing, never overwrite it. `storage_path` is `{wedding_id}/{asset_id}.jpg` in `uploads`.
    */
   photo: { asset_id: string; seed_key: string; storage_path_ext: "jpg"; storage_path: string; row: SeedRow<"assets"> };
+  /**
+   * The extra couple photos ASSET-PHOTO-2 to ASSET-PHOTO-6, so the invitation photo can be switched
+   * in the demo. Unlike `photo`, they have no D0 row: the photo step creates each one when its file
+   * (`scripts/seed-assets/couple-photo-{n}.jpg`) exists, and `reset_demo` keeps them (assets are
+   * never deleted, domain 3.7). The invite style keeps pointing at `photo`.
+   */
+  extra_photos: ExtraPhoto[];
   /** JOB-EXP-R2-PNG (D15): Ready, with artifact fields only when `rev2_card` was given. */
   rev2_job: { job_id: string; seed_key: string; revision: 2; artifact_path: string };
 };
+
+/** One extra couple photo: `couple-photo-{number}.jpg` is stored as seed key `ASSET-PHOTO-{number}`. */
+export type ExtraPhoto = { number: number; asset_id: string; seed_key: string; storage_path: string; file_name: string };
+
+/** The extra photos' numbers (the lead's photo PR commits couple-photo-2.jpg to couple-photo-6.jpg). */
+export const EXTRA_PHOTO_NUMBERS = [2, 3, 4, 5, 6] as const;
+
+/** `ASSET-PHOTO-{n}`: stable, so a rerun upserts the same row and the fixed id never changes. */
+export function extraPhotoSeedKey(number: number): string {
+  return `${SEED_KEYS.couple_photo}-${number}`;
+}
+
+/** The extra photos of a copy, with ids from `seededId` and storage paths `{wedding_id}/{asset_id}.jpg`. */
+export function extraPhotosOf(copy: SampleCopy): ExtraPhoto[] {
+  const wedding_id = seededId(copy, "weddings", SEED_KEYS.wedding);
+  return EXTRA_PHOTO_NUMBERS.map((number) => {
+    const seed_key = extraPhotoSeedKey(number);
+    const asset_id = seededId(copy, "assets", seed_key);
+    return { number, asset_id, seed_key, storage_path: `${wedding_id}/${asset_id}.jpg`, file_name: `couple-photo-${number}.jpg` };
+  });
+}
 
 export type BuildSeedDatasetOptions = {
   /** Supabase Auth user id per account email (seedAccounts). `fallbackUserId` makes them for local runs. */
@@ -907,6 +935,7 @@ export function buildSeedDataset(copy: SampleCopy, options: BuildSeedDatasetOpti
       storage_path: photoRow.storage_path,
       row: photoRow,
     },
+    extra_photos: extraPhotosOf(copy),
     rev2_job: { job_id: job.job_id, seed_key: SEED_KEYS.rev2_export_job, revision: 2, artifact_path },
   };
 }

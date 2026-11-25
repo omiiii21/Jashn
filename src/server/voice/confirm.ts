@@ -13,14 +13,22 @@ import {
   type CommandOutcome,
   type CommandResponse,
 } from "@/contracts/commands";
-import type { SessionActor, VoiceTurnStatus } from "@/contracts/domain";
+import type { JsonObject, SessionActor, VoiceTurnStatus } from "@/contracts/domain";
 import { routes } from "@/contracts/routes";
 
 import { membershipFor, readSession } from "./auth";
 import { resolveDeps, type ConfirmEdit, type VoiceDeps } from "./deps";
 import { flagsForRequest, type RequestFlags } from "./flags-for-request";
 import { ERROR_MESSAGES, jsonResponse, speechIfOn, toVoiceReply, VOICE_OFF_BLOCK, voiceErrorResponse } from "./ndjson";
-import { WRITE_KINDS, type ReplySpeech, type ReplyText, type ResolvedAction, type StoredResult, type StoredTurn } from "./types";
+import {
+  WRITE_KINDS,
+  type ReplySpeech,
+  type ReplyText,
+  type ResolvedAction,
+  type StoredResult,
+  type StoredTurn,
+  type ToolArguments,
+} from "./types";
 
 /**
  * `POST /api/voice/confirm` (voice.md 1.13). The phrase path in the turn route reaches the
@@ -152,6 +160,63 @@ function errorOutcome(
   return { kind: "error", status, body, reply: extra.reply ?? null, speech: extra.speech ?? null };
 }
 
+type PreviewEvent = NonNullable<VoiceConfirmErrorBody["preview"]>;
+
+/**
+ * Re-resolves a turn's stored actions against fresh read models, with no speech to text and
+ * no model call (1.13 on a 409). The stored references keep their original UUIDs. Returns
+ * null when the refreshed outcome is not a preview (the record went away meanwhile).
+ */
+export async function refreshPreview(
+  deps: VoiceDeps,
+  actor: SessionActor,
+  turn: StoredTurn,
+  flags: RequestFlags,
+): Promise<{ event: PreviewEvent; actions: ResolvedAction[]; missing_fields: string[] } | null> {
+  try {
+    const fresh = await deps.buildSnapshot({ actor, wedding_id: turn.wedding_id, context: null, attached_asset_id: null });
+    const snapshot = { ...fresh, ref_map: { ...fresh.ref_map, ...turn.ref_map } };
+    const tool: ToolArguments = {
+      intent: "act",
+      actions: turn.actions.map((action) => structuredClone(action.raw)),
+      missing_fields: [],
+      reply: "",
+      reply_language: turn.reply_language,
+    };
+    const outcome = await deps.resolveTurn({
+      actor,
+      wedding_id: turn.wedding_id,
+      tool,
+      snapshot,
+      transcript: turn.transcript,
+      register: turn.reply_language,
+      ui_language: actor.preferred_language,
+      writes_enabled: flags.writes_enabled,
+      context: null,
+      page: null,
+      setup_opened_at: turn.setup_opened_at,
+    });
+    if (outcome.kind !== "preview") return null;
+    const createdMs = Date.parse(turn.created_at);
+    const event: PreviewEvent = {
+      type: "preview",
+      voice_turn_id: turn.voice_turn_id,
+      status: "proposed",
+      title: outcome.title,
+      button_label: outcome.button_label,
+      actions: outcome.actions.map((action) => ({ ...action.preview, index: action.index })),
+      missing_fields: outcome.missing_fields,
+      confirm_enabled: outcome.confirm_enabled,
+      disabled_reason: outcome.disabled_reason,
+      reply: toVoiceReply({ ...outcome.reply, speech_text: null }, null),
+      expires_at: new Date((Number.isNaN(createdMs) ? deps.now() : createdMs) + VOICE_TURN_TTL_MS).toISOString(),
+    };
+    return { event, actions: outcome.actions, missing_fields: outcome.missing_fields };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Checks 4 to 7 of 1.13 for a turn that already passed checks 1 to 3 (session, ownership,
  * `voice_pilot`). Writes only through `deps.dispatch`.
@@ -272,6 +337,20 @@ export async function confirmTurn(input: ConfirmTurnInput): Promise<ConfirmTurnO
       }
       // 409 stale_version / draft_changed, or any other command error: the turn stays proposed.
       const status = COMMAND_ERROR_HTTP_STATUS[error.code] ?? 500;
+      if (error.code === "stale_version" || error.code === "draft_changed") {
+        // 1.13: re-run resolution against the current record (no model call), store the
+        // refreshed preview and answer 409 with it, so the next tap saves current versions.
+        const refreshed = await refreshPreview(deps, actor, turn, flags);
+        if (refreshed) {
+          await store.update(turn.voice_turn_id, {
+            actions: refreshed.actions,
+            missing_fields: refreshed.missing_fields,
+            events: [...turn.events.filter((event) => event.type !== "preview"), refreshed.event as unknown as JsonObject],
+            trace: { ...turn.trace, last_confirm_error: error.code, refreshed_at: new Date(deps.now()).toISOString() },
+          });
+          return errorOutcome(status, { ...error, message: error.message || plainCommandError(error) }, flags, { preview: refreshed.event });
+        }
+      }
       await store.update(turn.voice_turn_id, {
         trace: { ...turn.trace, last_confirm_error: error.code },
       });

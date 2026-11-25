@@ -33,7 +33,7 @@ import type {
 import type { SetupSavedHook, VoiceGate } from "@/contracts/flags";
 import type { AfterCommitMap, CommandHandlerResult, HandlerMap } from "@/contracts/services";
 import { getDb, type Db, type DbOrTx, type Tx } from "@/db/client";
-import { members, voiceTurns, weddings } from "@/db/schema";
+import { invitationLinks, members, voiceTurns, weddings } from "@/db/schema";
 import { appendActivityEntry, defaultSourceFor } from "@/server/activity/append";
 import { checkCommandActor, checkMemberInput } from "@/server/authz/guard";
 import { onSetupSaved, voiceGate } from "@/server/flags";
@@ -110,7 +110,7 @@ const defaultLog: DispatcherDeps["log"] = (message, detail) => {
 type Failure = { ok: false; error: CommandErrorBody };
 
 function fail(error: CommandErrorBody): Failure {
-  return { ok: false, error: { field: null, ...error } };
+  return { ok: false, error: { ...error, field: error.field ?? null } };
 }
 
 const VOICE_PAUSED_MESSAGE = "Voice changes are paused right now. You can type it and save.";
@@ -447,6 +447,22 @@ export function createDispatcher(overrides: Partial<DispatcherDeps> = {}) {
               checkCommandActor(handlerActor, command, { wedding_id, sharing: lockedSharing }) ??
               checkMemberInput(command, input, member.role, lockedSharing);
             if (recheck) throw new CommandFailure(recheck);
+          } else if (actor.kind === "guest") {
+            // A link revoked or rotated while this request waited on the lock now fails like an
+            // unknown token, with the same 404 body (G5, 6.3).
+            const linkRows = await tx
+              .select({ id: invitationLinks.id })
+              .from(invitationLinks)
+              .where(
+                and(
+                  eq(invitationLinks.wedding_id, wedding_id),
+                  eq(invitationLinks.household_id, actor.household_id),
+                  eq(invitationLinks.token_hash, Buffer.from(actor.token_hash, "hex")),
+                  isNull(invitationLinks.revoked_at),
+                ),
+              )
+              .limit(1);
+            if (!linkRows[0]) throw new CommandFailure({ code: "not_found", message: "Not found." });
           }
         } else if (idempotency_key) {
           // No wedding row to lock yet: same-key creates queue on the key instead.

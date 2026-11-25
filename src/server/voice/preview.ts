@@ -58,6 +58,17 @@ export type ServerFacts = {
   changed_fields?: string[];
   owners?: string;
   first_owner?: string;
+  /** request_card_export: an older revision's card was downloaded before (4.10 I-02). */
+  older_card?: boolean;
+  /** request_card_export: the newest published change was a venue move (4.10). */
+  venue_published_change?: boolean;
+  /** update_event: the function a time change stops clashing with (4.10 E-03). */
+  clash_cleared_with?: string;
+  clash_cleared_with_hi?: string;
+  /** update_commitment: how far the budget line goes over, and its label (4.10 M-08). */
+  over_budget_inr?: number;
+  over_budget_label_en?: string;
+  over_budget_label_hi?: string;
 };
 
 export const SERVER_FACTS_KEY = "__server";
@@ -728,9 +739,15 @@ async function buildUpdateCommitment(ctx: ResolveContext, action: ToolAction, in
   }
   const money = await deps.access.money();
   const line = money?.categories?.find((c) => c.budget_category === vendor?.vendor_category);
+  const overFacts: ServerFacts = {};
   if (line && line.planned_inr !== null) {
     const newLine = line.committed_inr - commitment.amount_inr + amount;
-    if (newLine > line.planned_inr) warnings.push(`${BUDGET_CATEGORY_LABELS[line.budget_category].en.split(" ")[0]} ${formatInr(newLine - line.planned_inr)} over its ${formatInr(line.planned_inr)} budget`);
+    if (newLine > line.planned_inr) {
+      warnings.push(`${BUDGET_CATEGORY_LABELS[line.budget_category].en.split(" ")[0]} ${formatInr(newLine - line.planned_inr)} over its ${formatInr(line.planned_inr)} budget`);
+      overFacts.over_budget_inr = newLine - line.planned_inr;
+      overFacts.over_budget_label_en = BUDGET_CATEGORY_LABELS[line.budget_category].en.split(" ")[0]?.toLowerCase();
+      overFacts.over_budget_label_hi = BUDGET_CATEGORY_LABELS[line.budget_category].hi;
+    }
   }
   const wrapped = wrapForManager(ctx, "update_commitment", input);
   const resolved: ResolvedAction = {
@@ -740,7 +757,7 @@ async function buildUpdateCommitment(ctx: ResolveContext, action: ToolAction, in
     labels: labelsFor(input),
     preview: { kind: action.kind, command: wrapped.command, fields: [field("amount_inr", vendor.name, formatInr(commitment.amount_inr), formatInr(amount), check.phrase)], after_saving: after, warnings },
   };
-  setFacts(resolved, { ...facts, new_amount_inr: amount });
+  setFacts(resolved, { ...facts, new_amount_inr: amount, ...overFacts });
   const title = wrapped.proposed ? "Agreed amount, sent for approval" : "Agreed amount";
   return { kind: "ready", action: resolved, title, button: wrapped.proposed ? "Send for approval" : "Save new amount", summary: `${title}: ${formatInr(commitment.amount_inr)} → ${formatInr(amount)}.`, disabled_reason: null, question: null };
 }
@@ -867,6 +884,7 @@ async function buildUpdateEvent(ctx: ResolveContext, action: ToolAction, index: 
   const after: { label: string; old: string; new: string }[] = [];
   const changed: string[] = [];
   const missing: string[] = [];
+  let clashCleared: { en: string; hi: string } | null = null;
   let sameCount = 0;
   let sameValue = "";
   const single = ctx.tool.actions.length === 1;
@@ -974,6 +992,7 @@ async function buildUpdateEvent(ctx: ResolveContext, action: ToolAction, index: 
         const oEnd = minutesOf(other.end_time);
         if (newStart !== null && newEnd !== null && oStart !== null && oEnd !== null && (newEnd <= oStart || newStart >= oEnd)) {
           after.push({ label: `The overlap with the ${other.title} goes away.`, old: "", new: "" });
+          clashCleared = { en: other.title, hi: other.title_hi };
         }
       }
     }
@@ -992,7 +1011,11 @@ async function buildUpdateEvent(ctx: ResolveContext, action: ToolAction, index: 
   const v = validateLikeTyping("update_event", input);
   if (!v.ok) missing.push(`${index}:${v.field}`);
   const resolved: ResolvedAction = { ...draft, input, labels: labelsFor(input), preview: { kind: action.kind, command: "update_event", fields, after_saving: after, warnings: [] }, missing_fields: missing };
-  setFacts(resolved, { ...facts, changed_fields: changed });
+  setFacts(resolved, {
+    ...facts,
+    changed_fields: changed,
+    ...(clashCleared ? { clash_cleared_with: clashCleared.en, clash_cleared_with_hi: clashCleared.hi } : {}),
+  });
   const title = changed.length === 1 ? eventFieldLabel(fn, changed[0] === "venue" ? "venue_name" : changed[0]) : `${fn.title} changes`;
   const first = fields[0];
   const summary = first ? `${title}: ${first.old ?? "-"} → ${(first.new ?? "").replace(/ \(.*\)$/, "")}.` : `${title}.`;
@@ -1243,10 +1266,8 @@ async function buildExport(ctx: ResolveContext, action: ToolAction, index: numbe
   }
   const input: JsonObject = { format: "png" };
   const older = (status?.jobs ?? []).some((j) => j.revision < published && j.status === "succeeded");
-  const venueChange = (itinerary?.unpublished_changes ?? []).length === 0 ? null : null;
-  void venueChange;
   const resolved: ResolvedAction = { ...draft, input, labels: labelsFor(input), preview: { kind: action.kind, command: "request_card_export", fields: [field("format", "Card", null, `Revision ${published} · PNG`, null)], after_saving: [], warnings: older ? ["The card downloaded before is out of date."] : [] } };
-  setFacts(resolved, { revision: published, venue_name: (itinerary?.functions.find((f) => f.event_kind === "reception")?.published?.venue?.name) ?? undefined });
+  setFacts(resolved, { revision: published, older_card: older, venue_name: (itinerary?.functions.find((f) => f.event_kind === "reception")?.published?.venue?.name) ?? undefined });
   return { kind: "ready", action: resolved, title: "Export card", button: "Export card", summary: `Export card · revision ${published}`, disabled_reason: null, question: null };
 }
 
@@ -1381,7 +1402,7 @@ async function buildWeddingProfile(ctx: ResolveContext, rawAction: ToolAction, i
       if (needNames) asks.push("what are the couple's names");
       const ask = asks.length ? `${capitalize(asks.join(", and ").replace(/, and (?=.*, and)/, ", "))}?` : "";
       const display = `${notedBits.length ? `Got it: ${notedBits.join(", ")}. ` : ""}${ask}`.trim();
-      question = { display_text: display, speech_text: display.replace(/₹[0-9,]+/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en")), language: r };
+      question = { display_text: display, speech_text: display.replace(/₹[0-9](?:[0-9,]*[0-9])?/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en")), language: r };
     } else {
       const month = num(action.month) ?? (dateText ? safeReadDate(dateText, today, null)?.month ?? null : null);
       const monthWord = month ? monthName(month) : null;
