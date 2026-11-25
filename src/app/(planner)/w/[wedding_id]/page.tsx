@@ -5,6 +5,7 @@ import { formatDateLong, formatDateRange } from "@/components/planner/format";
 import { Amount } from "@/components/planner/kit/Amount";
 import { HighlightOnce } from "@/components/planner/kit/HighlightOnce";
 import { NotShared } from "@/components/planner/kit/NotShared";
+import { VoiceHero } from "@/components/ui/voice-hero";
 import { HIGHLIGHT_PARAM, parseHighlight, routes } from "@/contracts/routes";
 
 import { getWeddingProfile } from "./_lib/read";
@@ -41,9 +42,15 @@ export default async function WeddingLandingPage({ params, searchParams }: Weddi
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 data-field="display_name" className="font-serif text-title text-ink">
+      <h1 data-field="display_name" className="font-title text-title text-ink">
         {profile.display_name}
       </h1>
+
+      {/* Voice first (Lane E): the first thing an owner sees is the way to talk to Jashn. */}
+      <VoiceHero
+        className="max-w-3xl"
+        examples={["Caterer ko ab kitna dena hai?", "Caterer ko chaalis hazaar advance diya tha", "Diya ne kya badla?"]}
+      />
 
       <section aria-labelledby="wedding-details-heading" className="max-w-xl rounded-sheet border border-line bg-paper p-4 lg:p-6">
         <h2 id="wedding-details-heading" className="text-heading text-ink">

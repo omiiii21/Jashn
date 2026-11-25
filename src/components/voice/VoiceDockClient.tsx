@@ -29,6 +29,12 @@ import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import {
+  VOICE_STATE_EVENT,
+  VOICE_STATE_REQUEST_EVENT,
+  VOICE_TOGGLE_EVENT,
+  type VoiceDockState,
+} from "@/components/ui/voice-events";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuLabel,
@@ -912,6 +918,38 @@ export function VoiceDockClient(props: VoiceDockClientProps) {
   const cantRecord = choice === null;
   const micDisabled = voiceOff || busy || !online;
   const micLabel = voiceOff ? copy.voice_off : busy ? copy.mic_busy : cantRecord ? copy.cant_record : recording ? (locked ? copy.stop_send : copy.listening) : copy.mic_label;
+
+  // The voice-first landing card (Lane E) drives this same dock, so it stays the only recorder
+  // (D20). Its tap toggles a locked recording, like Space or Enter on the mic; it hears our state.
+  const dockState: VoiceDockState = voiceOff || !online ? "off" : busy ? "busy" : recording ? "listening" : "idle";
+  const dockStateRef = useRef<VoiceDockState>(dockState);
+  const toggleRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    dockStateRef.current = dockState;
+    window.dispatchEvent(new CustomEvent(VOICE_STATE_EVENT, { detail: dockState }));
+  }, [dockState]);
+  useEffect(() => {
+    toggleRef.current = () => {
+      const m = micRef.current;
+      if (m.kind === "idle") {
+        unlockReplyAudio();
+        beginRecording(true);
+      } else if (m.kind === "listening" || m.kind === "starting") {
+        unlockReplyAudio();
+        void finishRecording();
+      }
+    };
+  });
+  useEffect(() => {
+    const onToggle = () => toggleRef.current();
+    const onRequest = () => window.dispatchEvent(new CustomEvent(VOICE_STATE_EVENT, { detail: dockStateRef.current }));
+    window.addEventListener(VOICE_TOGGLE_EVENT, onToggle);
+    window.addEventListener(VOICE_STATE_REQUEST_EVENT, onRequest);
+    return () => {
+      window.removeEventListener(VOICE_TOGGLE_EVENT, onToggle);
+      window.removeEventListener(VOICE_STATE_REQUEST_EVENT, onRequest);
+    };
+  }, []);
 
   const statusText = voiceOff
     ? copy.voice_off
