@@ -1,19 +1,20 @@
 import { notFound } from "next/navigation";
 
 import { ChangeList } from "@/components/invite/ChangeList";
+import { ExportsPanel } from "@/components/invite/ExportsPanel";
 import type { ChangeSubjects } from "@/components/invite/change-text";
 import { InvitePublishPanel } from "@/components/invite/InvitePublishPanel";
 import { istDateTime, istDayMonth } from "@/components/invite/ist-format";
 import { CommandFailure } from "@/contracts/commands";
-import type { Itinerary } from "@/contracts/read-models";
+import type { ExportJobStatusModel, Itinerary } from "@/contracts/read-models";
 import { dispatchCommand } from "@/server/actions/dispatch";
 import { requireMember } from "@/server/auth/session";
 import { services } from "@/server/services";
 
 /**
  * The Invite page (D105, D107). Owners review and publish the draft here through
- * PublishSheet; managers see the same list read-only. The studio and the exports panel
- * mount below in their own branches.
+ * PublishSheet; managers see the same list read-only. The exports panel sits below; the
+ * studio mounts above it from lane-d-invite-minimum.
  */
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,7 @@ export default async function InvitePage({ params }: PageProps<"/w/[wedding_id]/
 
   const isOwner = actor.role === "owner";
   const changes = itinerary.unpublished_changes;
+  const exports: ExportJobStatusModel = await services.read("export_job_status", { actor, wedding_id });
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6">
@@ -86,6 +88,8 @@ export default async function InvitePage({ params }: PageProps<"/w/[wedding_id]/
           </div>
         ) : null}
       </section>
+
+      <ExportsPanel wedding_id={wedding_id} model={exports} role={isOwner ? "owner" : "manager"} />
     </div>
   );
 }
