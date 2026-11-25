@@ -107,3 +107,57 @@ test.describe("lane C: flags and voice routes", () => {
     expect(body.error.code).toBe("forbidden");
   });
 });
+
+test.describe("lane C: the flags drawer (flagsmith 5.9, AT-1.8, AT-1.9)", () => {
+  test("an internal account opens it from the reason chip; with no Flagsmith key every flag says fallback", async ({ page }) => {
+    await page.goto(`/w/${WEDDING_ID}`);
+    // With no key, an internal account gets the safe-mode chip (AT-1.9).
+    const chip = page.locator('[data-chip="safe_mode"], [data-chip="internal_team"], [data-chip="voice_on"]').first();
+    await chip.click();
+    await page.getByTestId("open-flag-drawer").click();
+
+    const drawer = page.getByTestId("flag-drawer");
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole("heading", { name: "Flags and experiment" })).toBeVisible();
+
+    // Part 1: every contract flag, each marked fallback while Flagsmith can't be read.
+    const session = drawer.getByTestId("drawer-session");
+    await expect(session.locator("tr[data-flag]")).toHaveCount(8);
+    await expect(session.locator('tr[data-flag] [data-fallback="true"]')).toHaveCount(8);
+
+    // Part 2: the heading and the AT-1.8 line, word for word, with a row per arm.
+    const sent = drawer.getByTestId("drawer-sent");
+    await expect(
+      sent.getByRole("heading", { name: "Sent by Jashn (app-side counts, not Flagsmith's statistics)" }),
+    ).toBeVisible();
+    await expect(
+      sent.getByText(
+        "Flagsmith shows statistics from 50 owners and 5 saves per arm. A 10-point effect needs about 385 per arm. We claim no winner.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(sent.locator("tr[data-arm]")).toHaveCount(2);
+
+    // Part 3: the disclosure, with no numbers of its own.
+    await expect(
+      drawer
+        .getByTestId("drawer-synthetic")
+        .getByText(
+          "Synthetic data: 800 scripted owners in a separate Flagsmith environment, with save rates planted at 50% (form-first) and 60% (voice-first). It tests the experiment's wiring, not the product.",
+          { exact: true },
+        ),
+    ).toBeVisible();
+
+    // Part 4: the self-check is red, and 50 probes run (all fallbacks, no events).
+    const health = drawer.getByTestId("drawer-health");
+    await expect(health.getByTestId("drawer-check").getByText("Failing")).toBeVisible();
+    await health.getByTestId("drawer-run-probes").click();
+    const probes = health.getByTestId("drawer-probes");
+    await expect(probes.locator("tbody tr")).toHaveCount(50);
+    await expect(probes.getByText("voice_pilot on: 0 of 50 (0 naming voice_rollout)")).toBeVisible();
+    await expect(health.getByTestId("drawer-turns")).toBeVisible();
+
+    await health.getByTestId("drawer-run-check").click();
+    await expect(health.getByText(/SDK probe: skipped/)).toBeVisible();
+  });
+});
