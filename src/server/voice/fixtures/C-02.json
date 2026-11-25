@@ -1,0 +1,11 @@
+{
+ "row_id": "C-02",
+ "start_state": "any open card",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "नहीं, रहने दो।",
+  "language_code": "hi-IN"
+ },
+ "llm": null,
+ "audio_text": null
+}
