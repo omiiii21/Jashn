@@ -123,6 +123,32 @@ test.describe("lane C: the setup screen", () => {
     expect(html).not.toMatch(/ser\.[A-Za-z0-9]/);
   });
 
+  test("the typed form checks the date and saves through the dispatcher", async ({ page }) => {
+    const response = await page.goto("/setup");
+    if (!page.url().includes("/setup")) {
+      expect(page.url()).toMatch(/\/login/);
+      return;
+    }
+    expect(response?.status()).toBe(200);
+    // Voice-first opens on the mic: "Type instead" reveals the same form.
+    const typeInstead = page.getByRole("button", { name: "Type instead" });
+    if (await typeInstead.isVisible()) await typeInstead.click();
+    await page.getByLabel("Bride").fill("Mira");
+    await page.getByLabel("Groom").fill("Kabir");
+    await page.getByLabel("Day").fill("14");
+    await page.getByLabel("Month").fill("12");
+    await page.getByRole("button", { name: "Save wedding" }).click();
+    // No year: never filled in, and nothing is sent (AT-1.4).
+    await expect(page.getByText("Add the full date: day, month and year.")).toBeVisible();
+    await page.getByLabel("Year").fill("2026");
+    await page.getByLabel("City").fill("Bengaluru");
+    await page.getByLabel("Budget (₹)").fill("12,00,000");
+    await page.getByLabel("Guests").fill("250");
+    await page.getByRole("button", { name: "Save wedding" }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith("/setup"), { timeout: 15_000 });
+    expect(new URL(page.url()).pathname).toMatch(/^\/(w\/.+)?$/);
+  });
+
   test("a fixture setup turn (S-01) with no wedding streams a terminal event", async ({ request }) => {
     const response = await request.post("/api/voice/turn", {
       multipart: {
