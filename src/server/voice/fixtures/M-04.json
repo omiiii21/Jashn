@@ -1,0 +1,34 @@
+{
+ "row_id": "M-04",
+ "start_state": "D0, after a caterer question",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "नहीं, पचास नहीं, चालीस हज़ार दिए थे।",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "hi",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "correct_payment",
+    "vendor_id": "VEN-CAT",
+    "amount_inr": 40000,
+    "previous_inr": 50000,
+    "heard": [
+     {
+      "field": "amount_inr",
+      "phrase": "चालीस हज़ार"
+     },
+     {
+      "field": "previous_inr",
+      "phrase": "पचास"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}

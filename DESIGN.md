@@ -4,18 +4,18 @@ description: "Card and khata: the guest side is wedding stationery, and the plan
 colors: {
   paper: "#FFFCF5", ivory: "#F7EFDF", ivory-deep: "#EEE2CB", ink: "#2B1D1A", ink-2: "#54443E", ink-3: "#6E5D55",
   line: "#E3D5BE", line-strong: "#8E7B6E", maroon: "#6A1224", maroon-deep: "#4E0C1A", maroon-tint: "#F4E1DF",
-  on-maroon-2: "#E9CFC6", gold: "#C9A24E", gold-ink: "#7D5B17", paid: "#2F6A3B", paid-tint: "#E3EEDF",
-  due: "#8A5300", due-tint: "#FBEBC4", overdue: "#B3261E", overdue-tint: "#FADBD6", proposal: "#1D5468",
-  proposal-tint: "#DDEBEF", wash: "#F6E4B4", peacock: "#14505E", peacock-deep: "#0D3A45" }
+  on-maroon-2: "#E9CFC6", gold: "#C9A24E", gold-ink: "#7D5B17", paid: "#3F5B44", paid-tint: "#EFE8D9",
+  due: "#7D5B17", due-tint: "#EFE8D9", overdue: "#A3301F", overdue-tint: "#F4E4DD", proposal: "#46525A",
+  proposal-tint: "#EFE8D9", wash: "#F3E9CC", peacock: "#14505E", peacock-deep: "#0D3A45" }
 typography:
-  meta: { fontFamily: "Anek Devanagari", fontSize: "13px", fontWeight: 400, lineHeight: "18px" }
-  meta-phone: { fontFamily: "Anek Devanagari", fontSize: "14px", fontWeight: 400, lineHeight: "20px" }
-  table: { fontFamily: "Anek Devanagari", fontSize: "15px", fontWeight: 400, lineHeight: "22px" }
-  body: { fontFamily: "Anek Devanagari", fontSize: "16px", fontWeight: 400, lineHeight: "24px" }
-  heading: { fontFamily: "Anek Devanagari", fontSize: "18px", fontWeight: 600, lineHeight: "26px" }
-  panel: { fontFamily: "Anek Devanagari", fontSize: "22px", fontWeight: 600, lineHeight: "28px" }
-  rail-name: { fontFamily: "Eczar", fontSize: "20px", fontWeight: 600, lineHeight: "26px" }
-  title: { fontFamily: "Eczar", fontSize: "28px", fontWeight: 600, lineHeight: "34px" }
+  meta: { fontFamily: "Geist", fontSize: "13px", fontWeight: 400, lineHeight: "18px" }
+  meta-phone: { fontFamily: "Geist", fontSize: "14px", fontWeight: 400, lineHeight: "20px" }
+  table: { fontFamily: "Geist", fontSize: "15px", fontWeight: 400, lineHeight: "22px" }
+  body: { fontFamily: "Geist", fontSize: "16px", fontWeight: 400, lineHeight: "24px" }
+  heading: { fontFamily: "Geist", fontSize: "18px", fontWeight: 600, lineHeight: "26px" }
+  panel: { fontFamily: "Geist", fontSize: "22px", fontWeight: 600, lineHeight: "28px" }
+  rail-name: { fontFamily: "Geist Serif", fontSize: "20px", fontWeight: 400, lineHeight: "26px" }
+  title: { fontFamily: "Geist Serif", fontSize: "28px", fontWeight: 400, lineHeight: "34px" }
   names: { fontFamily: "Eczar", fontSize: "clamp(2.75rem, 2.2rem + 2.4vw, 3.25rem)", fontWeight: 600, lineHeight: 1.15, letterSpacing: "-0.01em" }
   insert-title: { fontFamily: "Eczar", fontSize: "clamp(1.5rem, 1.4rem + 0.5vw, 1.625rem)", fontWeight: 500, lineHeight: 1.4 }
   wording: { fontFamily: "Eczar", fontSize: "18px", fontWeight: 400, lineHeight: "28px" }
@@ -39,7 +39,13 @@ components:
 
 # Design System: Jashn
 
-**Status: Proposed (built from docs/prep/design-direction.md; the live design round was skipped for time).** Under D86, the user approves one screen, Money's Annapoorna Caterers vendor page, at the 10:45 batch. design-direction.md keeps the reasoning, references and wireframes, and `decisions.md` wins over both files. Lane B owns this file and `src/app/globals.css` after the contracts PR (D3, D4). Example names follow demo-data.md.
+**Status: Approved by Lane E (Sagnik, D132) at 13:30 on 25 Nov.** The design reference is the Doop canvas "Jashn" (https://doop.design/c/eAV3iW7YEg): Foundations (colour, type, palette options), Components and Prototype (Overview, current and voice-first). Three changes from the proposal:
+
+1. **Type:** Geist for the interface and figures, Geist Serif for planner page titles and the rail name. The invitation keeps Eczar and Tiro, so `--font-serif`, `--font-classic` and `--font-display` are unchanged. Hindi falls back to Anek Devanagari glyph by glyph.
+2. **Quiet status colours:** paid, due and proposal chips share one warm neutral ground (#EFE8D9), with colour kept in the word and the icon. Overdue keeps its own tint. Screens read maroon and ivory first.
+3. **Voice-first:** voice is the first thing an owner sees after signing in. See "Voice-first landing" under Components. The header mic stays in the same slot on every screen (D20).
+
+design-direction.md keeps the reasoning, references and wireframes, and `decisions.md` wins over both files. Lane E owns this file and `src/app/globals.css` (D132). Example names follow demo-data.md.
 
 ## Overview
 
@@ -73,9 +79,10 @@ A committed maroon cover, two warm papers, warm near-black ink and one flat gold
 - **Line** (#E3D5BE): decorative hairlines, with no contrast duty. **Line strong** (#8E7B6E): input borders and control outlines, which carry the 3:1 duty.
 
 ### Status (always with an icon and a word)
-- **Paid**, mehendi green (#2F6A3B on #E3EEDF): paid, attending, saved. **Due**, haldi amber (#8A5300 on #FBEBC4): due within 7 days, needs a look, overpaid.
-- **Overdue**, sindoor vermilion (#B3261E on #FADBD6): overdue, errors, destructive actions. Maroon never means "error"; the two sit 1.86:1 apart.
-- **Proposal**, peacock (#1D5468 on #DDEBEF): proposed by the manager and not yet approved. **Wash** (#F6E4B4): the "just changed" highlight, which fades out.
+The Quiet palette (approved 13:20): one warm neutral chip ground, with the status colour in the word, the dot and the icon.
+- **Paid**, muted mehendi green (#3F5B44 on #EFE8D9, 6.17:1): paid, attending, saved. **Due**, gold-ink (#7D5B17 on #EFE8D9, 5.09:1): due within 7 days, needs a look, overpaid.
+- **Overdue**, sindoor vermilion (#A3301F on #F4E4DD, 5.66:1): overdue, errors, destructive actions. It is the only status that keeps its own tint. Maroon never means "error".
+- **Proposal**, slate (#46525A on #EFE8D9, 6.58:1): proposed by the manager and not yet approved. **Wash** (#F3E9CC): the "just changed" highlight, which fades out.
 - **Invitation themes:** Maroon & Gold is the demo theme: maroon-deep ground, ivory stock, maroon names, gold foil, a gold-ink blessing and Hindi line, ink details. Peacock & Gold ships only if time allows and changes only the ground (peacock-deep #0D3A45) and the names (peacock #14505E).
 
 ### Contrast (WCAG 2.x, computed)
@@ -92,8 +99,10 @@ Tailwind utilities use the role names: `bg-paper`, `bg-ivory`, `bg-ivory-deep`, 
 
 ## Typography
 
-**Display Font:** Eczar (Rosetta; variable weight 400–800; Latin and Devanagari designed together). Loaded as `--font-display`; the utility is `font-serif`.
-**Body Font:** Anek Devanagari (Ek Type; weight 100–800, width 75–125). Loaded as `--font-body`; the utility is `font-sans`, which is also the page default. If Anek fails the render test, swap in Mukta in `fonts.ts`; the tokens keep their names.
+**Interface Font:** Geist (Vercel; variable weight 100–900; latin and latin-ext, so the ₹ is drawn in the face). Loaded as `--font-ui`; the utility is `font-sans`, which is also the page default. The stack is Geist, then Anek Devanagari, so Hindi and Devanagari digits fall back glyph by glyph.
+**Planner Title Font:** Geist Serif (OFL, committed at `public/brand/fonts/` and loaded with `next/font/local`; weight 400 only). Loaded as `--font-geist-serif`; the utility is `font-title`. Use it for the page h1 and the wedding name in the rail. Latin only; a Hindi title falls back to Eczar.
+**Display Font (invitation):** Eczar (Rosetta; variable weight 400–800; Latin and Devanagari designed together). Loaded as `--font-display`; the utility is `font-serif`. Use it for guest names, function names and invitation wording, and for planner text that is mostly Hindi.
+**Hindi body fallback:** Anek Devanagari (Ek Type; weight 100–800, width 75–125). Loaded as `--font-body`; it sits second in `font-sans`.
 **Studio only:** Tiro Devanagari Hindi, the "classic" choice for the invitation's Hindi lines. Loaded as `--font-hindi`; the utility is `font-classic`.
 
 **Character:** Eczar is an Indian, bilingual and festive serif that needs no script face. Anek speaks English, Hindi and Hinglish in one voice, with the ₹ drawn in the face and true tabular figures.
@@ -148,6 +157,12 @@ Depth comes from tonal layers: ivory-deep, then ivory, then paper, with the maro
 - **The mic, on every screen:** it sits in the same top-right header slot on desktop and phone. It is a 44 × 44 px minimum disc in maroon on the maroon-deep header, with a 24 px ivory Microphone icon. Lane B confirms the treatment in the shell render. Push-to-talk only.
 - At idle it does nothing: no breathing and no glow. On press it darkens to maroon-deep and scales from 1.00 to 1.06 in 100 ms (colour only with reduced motion).
 - The reason chip sits beside it: "Voice · team preview", plus "Questions only" while voice writes are off (D121), in on-maroon-2 text. With voice off, the mic shows MicrophoneSlash, is disabled, and reads "Voice is switched off right now. You can type or edit directly."
+
+### Voice-first landing (Overview)
+- After sign-in, the owner lands on a large **listening card** at the top of Overview: a push-to-talk disc (hold it, or hold Space anywhere), a "Listening" state with a level meter, and the live transcript. Recognised money is washed, people and vendors are maroon-tint, and dates and functions are ivory-deep. Under it: "English, हिंदी or Hinglish · Nothing is saved until you confirm", and a "type instead" link.
+- Under the card, **"What I caught"** lists one card per thing heard: a kind tag (Payment correction, Dietary need, Task for Diya, Idea), the action, the words it came from, the effect on totals, and Confirm / Edit / Dismiss. One ramble can produce several cards. Voice still never writes on its own; Confirm does.
+- The right column holds "Needs you" (proposals, conflicts), "At a glance" (still owed, next payment, RSVPs, next function) and recent changes.
+- The pattern comes from Sagnik's NotToMiss "Today" screen (voice dump → tasks). Building it is Lane B (layout) and Lane C (voice), and Overview is scope #10, so it ships only if those sessions are ahead.
 
 ### Voice review card
 - It shows "You said …" with the recognised spans underlined in maroon (tap one to make it plain text again), with a dotted underline and a question on doubtful words. Fields show "?" when uncertain or missing. An "After saving" block shows the resulting balances. The button is named for the action ("Save contract and payment"), and corrections show the old value struck through.

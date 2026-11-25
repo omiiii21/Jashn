@@ -1,0 +1,29 @@
+{
+ "row_id": "M-12",
+ "start_state": "D0, as Diya",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Decorator को बीस हज़ार दे दिए।",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "hinglish",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "record_payment",
+    "vendor_id": "VEN-DEC",
+    "amount_inr": 20000,
+    "heard": [
+     {
+      "field": "amount_inr",
+      "phrase": "बीस हज़ार"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}
