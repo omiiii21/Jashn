@@ -12,6 +12,7 @@ import type { HouseholdLinkStatus } from "@/contracts/read-models";
 import type { Dispatch } from "../forms/command";
 import { useCommand } from "../forms/useCommand";
 import { formatDayTime } from "../format";
+import { absoluteLinkUrl } from "./link-url";
 
 export type FunctionOption = { event_id: string; title: string };
 export type HouseholdOption = { household_id: string; household_name: string };
@@ -505,7 +506,7 @@ export function HouseholdLinks({
       setConfirm(null);
       const result = response.result as { links?: { household_id: string; url?: string }[]; tokens_already_issued?: boolean };
       const link = result.links?.find((item) => item.household_id === household_id)?.url ?? null;
-      setUrl(link);
+      setUrl(link ? absoluteLinkUrl(link, window.location.origin) : null);
       setNote(link ? null : "The link was made earlier and can't be shown again. Make a new one to copy it.");
     }
   }
