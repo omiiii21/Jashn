@@ -6,7 +6,7 @@ import { PROBE_JOB_ID } from "@/contracts/jobs";
 import { RENDER_TOKEN_PARAM } from "@/contracts/routes";
 import { PROBE_CARD_EVENT_IDS, PROBE_CHECK_LINE, PROBE_PHOTO, probeSnapshot } from "@/server/export/probe-fixture";
 import { verifyRenderToken } from "@/server/export/render-token";
-import { cardPhotoFor, jobDeps } from "@/server/jobs/deps";
+import { JOBS_WIRED, cardPhotoFor, jobDeps } from "@/server/jobs/deps";
 
 /**
  * The card page Chromium screenshots (export-and-recovery 1.6, 3.2): `/render/card/{job_id}?t=…`.
@@ -52,6 +52,7 @@ export default async function RenderCardPage({ params, searchParams }: PageProps
     );
   }
 
+  if (!JOBS_WIRED) notFound();
   const job = await jobDeps.store.readJob(null, job_id);
   if (!job) notFound();
   const publication = await jobDeps.store.readPublicationById(null, job.publication_id);

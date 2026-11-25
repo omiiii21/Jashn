@@ -2,7 +2,7 @@ import "server-only";
 
 import { services } from "@/server/services";
 
-import { jobDeps } from "./deps";
+import { JOBS_WIRED, jobDeps } from "./deps";
 import type { JobDeps } from "./handlers";
 import { kickRun } from "./kick";
 import type { OpsDeps } from "./ops";
@@ -17,6 +17,7 @@ type DepsTx = typeof jobDeps extends JobDeps<infer T> ? T : never;
 
 export const opsDeps: OpsDeps<DepsTx> = {
   ...jobDeps,
+  wired: JOBS_WIRED,
   verify: (authorization) => verifyOpsBearer(authorization),
   dispatch: (actor, envelope) => services.dispatch(actor, envelope),
   kick: (job_id) => void kickRun(job_id, { wait: false }),

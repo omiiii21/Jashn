@@ -30,6 +30,8 @@ import { cardFacts } from "./view";
  */
 
 export type OpsDeps<Tx> = JobDeps<Tx> & {
+  /** False in fixture mode (no database): every job id is then not found. */
+  wired: boolean;
   /** The bearer check: true for the jobs token. */
   verify: (authorization: string | null) => Promise<boolean>;
   dispatch: Services["dispatch"];
@@ -124,9 +126,9 @@ async function waitWhileActive<Tx>(deps: OpsDeps<Tx>, job: ExportJobRow, wait_s:
   return current;
 }
 
-async function existingJob<Tx>(store: JobStore<Tx>, job_id: string): Promise<ExportJobRow | null> {
-  if (!isUuidShaped(job_id)) return null;
-  return store.readJob(null, job_id);
+async function existingJob<Tx>(deps: { wired: boolean; store: JobStore<Tx> }, job_id: string): Promise<ExportJobRow | null> {
+  if (!deps.wired || !isUuidShaped(job_id)) return null;
+  return deps.store.readJob(null, job_id);
 }
 
 /** Lazy expiry under the wedding lock, with no webhook (5.1). */
@@ -149,7 +151,7 @@ async function statusBody<Tx>(deps: OpsDeps<Tx>, job: ExportJobRow): Promise<Ops
 /** GET /api/ops/export-jobs/[job_id] (5.1, 5.2). */
 export async function opsGetStatus<Tx>(deps: OpsDeps<Tx>, request: Request, job_id: string): Promise<Response> {
   if (!(await deps.verify(request.headers.get("authorization")))) return opsUnauthenticated();
-  const job = await existingJob(deps.store, job_id);
+  const job = await existingJob(deps, job_id);
   if (!job) return opsNotFound();
 
   const params = new URL(request.url).searchParams;
@@ -212,7 +214,7 @@ export async function opsRetry<Tx>(deps: OpsDeps<Tx>, request: Request, job_id: 
   if (!parsed) return opsError("validation_failed", "Body must be JSON with expected_export_key.", { field: "body" });
   const wait = intParam(new URL(request.url).searchParams.get("wait"), RETRY_WAIT_S);
   if (wait === null) return opsError("validation_failed", `wait must be a whole number from ${RETRY_WAIT_S.min} to ${RETRY_WAIT_S.max}.`, { field: "wait" });
-  const job = await existingJob(deps.store, job_id);
+  const job = await existingJob(deps, job_id);
   if (!job) return opsNotFound();
 
   const response = await deps.dispatch(NUDGEBEE_ACTOR, {

@@ -7,7 +7,7 @@ import { RenderError, renderErrorMessage, type RenderTestMode } from "@/server/e
 import { RenderTokenSecretMissing } from "@/server/export/render-token";
 import { renderProbe, renderTimingHeaders } from "@/server/export/probe";
 import { verifyOpsBearer } from "@/server/jobs/ops-auth";
-import { workerDeps } from "@/server/jobs/deps";
+import { JOBS_WIRED, workerDeps } from "@/server/jobs/deps";
 import { OPS_HEADERS, opsError, opsJson, opsNotFound, opsUnauthenticated } from "@/server/jobs/ops-http";
 import { claimJob, finishJob } from "@/server/jobs/worker";
 
@@ -94,7 +94,7 @@ export async function POST(request: Request, context: RouteContext<"/api/ops/exp
 
 /** Steps 3 to 5 now, 6 to 14 in `after()` (export-and-recovery 3.3). */
 async function runJob(job_id: string): Promise<Response> {
-  if (!isUuidShaped(job_id)) return opsNotFound();
+  if (!JOBS_WIRED || !isUuidShaped(job_id)) return opsNotFound();
   try {
     const claim = await claimJob(workerDeps, job_id);
     if (claim.kind === "not_found") return opsNotFound();
