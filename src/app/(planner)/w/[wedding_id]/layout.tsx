@@ -3,7 +3,8 @@ import { Suspense, type ReactNode } from "react";
 
 import { LiveRefresh } from "@/components/live/LiveRefresh";
 import { formatDate, formatDateRange } from "@/components/planner/format";
-import { FocusMain, MAIN_ID } from "@/components/planner/shell/FocusMain";
+import { FocusMain } from "@/components/planner/shell/FocusMain";
+import { MAIN_ID } from "@/components/planner/shell/main-id";
 import { memberLabel } from "@/components/planner/shell/member-label";
 import { PhoneTabs } from "@/components/planner/shell/PhoneTabs";
 import { newestSeqBySection, type SectionSeqs } from "@/components/planner/shell/nav-items";
@@ -14,6 +15,7 @@ import { SectionTitle } from "@/components/planner/shell/SectionTitle";
 import { WeddingMenu } from "@/components/planner/shell/WeddingMenu";
 import { VoiceDock } from "@/components/voice/VoiceDock";
 import { routes } from "@/contracts/routes";
+import { dispatchCommand } from "@/server/actions/dispatch";
 
 import { getWeddingProfile, readModel } from "./_lib/read";
 
@@ -116,7 +118,13 @@ export default async function WeddingShellLayout({ children, params }: WeddingSh
             <div className="order-last flex min-h-7 basis-full items-center md:order-none md:min-h-0 md:basis-auto">
               {profile.is_sample ? <SampleBadge /> : null}
             </div>
-            <WeddingMenu wedding_id={wedding_id} wedding_name={profile.display_name} member_label={member_label} />
+            <WeddingMenu
+              wedding_id={wedding_id}
+              wedding_name={profile.display_name}
+              member_label={member_label}
+              role={profile.member.role}
+              dispatch={dispatchCommand}
+            />
             <div data-slot="voice" className={VOICE_SLOT_CLASS}>
               <VoiceDock wedding_id={wedding_id} />
             </div>

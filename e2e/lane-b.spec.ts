@@ -120,7 +120,10 @@ async function micReport(page: Page): Promise<MicReport> {
 
     const slots = [...document.querySelectorAll('[data-slot="voice"]')];
     const slot = slots.find(visible) ?? null;
-    const mic = slot?.querySelector("button") ?? null;
+    // The mic itself, not the reason chips the dock may render before it (D121).
+    const TALK = /hold to talk|push to talk|tap to talk|micro?phone|\bmic\b/i;
+    const buttons = slot ? [...slot.querySelectorAll("button")].filter(visible) : [];
+    const mic = buttons.find((button) => TALK.test(nameOf(button))) ?? buttons[0] ?? null;
     const box = mic?.getBoundingClientRect() ?? null;
 
     const controls = [...document.querySelectorAll('button, [role="button"], a[href], input, textarea')].filter(visible);
@@ -236,7 +239,8 @@ test.describe("Annapoorna Caterers at D0 (AT-6.1)", () => {
     await expect(main).not.toContainText("Outstanding");
     const owed = lead.locator('[data-field="outstanding_inr"]');
 
-    // The ₹ comes from Anek with tabular figures, never a fallback face (design-direction 9, ban 11).
+    // The ₹ comes from the app's own faces (Geist, then Anek, per Lane E's pick under D132) with
+    // tabular figures, never a system fallback face (design-direction 9, ban 11).
     const type = await owed.evaluate(async (element) => {
       await document.fonts.ready;
       const style = getComputedStyle(element);
@@ -248,7 +252,7 @@ test.describe("Annapoorna Caterers at D0 (AT-6.1)", () => {
           return low <= 0x20b9 && 0x20b9 <= high;
         });
       const rupeeFaces = [...document.fonts].filter(
-        (face) => /anek/i.test(face.family) && face.status === "loaded" && covers20b9(face.unicodeRange),
+        (face) => /geist|anek/i.test(face.family) && face.status === "loaded" && covers20b9(face.unicodeRange),
       );
       return {
         family: style.fontFamily,
@@ -256,9 +260,9 @@ test.describe("Annapoorna Caterers at D0 (AT-6.1)", () => {
         rupeeFaceLoaded: rupeeFaces.length > 0,
       };
     });
-    expect(type.family.split(",")[0]).toMatch(/anek/i);
+    expect(type.family.split(",")[0]).toMatch(/geist|anek/i);
     expect(type.numeric).toContain("tabular-nums");
-    expect(type.rupeeFaceLoaded, "an Anek face covering U+20B9 has loaded").toBe(true);
+    expect(type.rupeeFaceLoaded, "a Geist or Anek face covering U+20B9 has loaded").toBe(true);
   });
 });
 
@@ -288,7 +292,8 @@ test.describe("the nav", () => {
       // Activity sits in the rail from 1024 px, and in the wedding menu below it.
       if (width >= 1024) {
         await expect(nav.getByRole("link", { name: "Activity" })).toHaveAttribute("href", routes.activity(WEDDING_ID));
-        await expect(page.getByRole("button", { name: "Wedding menu" })).toBeHidden();
+        // Mira is an owner: her menu stays at every width for "Team and sharing" (D64, D109).
+        await expect(page.getByRole("button", { name: "Wedding menu" })).toBeVisible();
       } else {
         await page.getByRole("button", { name: "Wedding menu" }).click();
         const activity = page.getByRole("menuitem", { name: "Activity" });
@@ -547,5 +552,47 @@ test.describe("Guests at D0 (AT-4.2, AT-4.8, AT-9.6)", () => {
     await expect(tara).toHaveCount(1);
     await expect(tara.locator('[data-field="phone"]')).toHaveText("+91 90000 01601");
     await expectNoSideways(page, "Guests");
+  });
+});
+
+test.describe("Guests: the owner's controls (AT-4.8, AT-4.9)", () => {
+  test("Mira sees Add a guest, Edit invitations and New invite link", async ({ page }) => {
+    await open(page, routes.guests(WEDDING_ID));
+    const main = page.getByRole("main");
+    await main.getByRole("button", { name: "Add a guest", exact: true }).click();
+    const form = main.getByRole("form", { name: "Add a guest" });
+    await expect(form.getByLabel("Full name")).toBeVisible();
+    await expect(form.getByRole("group", { name: "Invite to" })).toBeVisible();
+    await expect(form.getByRole("button", { name: "Add guest", exact: true })).toBeVisible();
+    await expect(main.getByRole("button", { name: "Edit invitations for Tara Bhat" })).toHaveCount(1);
+    await expect(main.getByRole("button", { name: /^New invite link for the .+ household$/ })).toHaveCount(16);
+  });
+
+  test("no sideways scroll at 390 px with the add form and a link confirmation open", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: heightFor(390) });
+    await open(page, routes.guests(WEDDING_ID));
+    const main = page.getByRole("main");
+    await main.getByRole("button", { name: "Add a guest", exact: true }).click();
+    await main.getByRole("button", { name: /^New invite link for the .+ household$/ }).first().click();
+    await expect(main.getByText("Any earlier link for this household will stop working.")).toBeVisible();
+    await expectNoSideways(page, "Guests at 390 px");
+  });
+});
+
+test.describe("Team and sharing (D64, D109)", () => {
+  test("the wedding menu opens the sheet with Send invite, and Escape closes it", async ({ page }) => {
+    await open(page, routes.overview(WEDDING_ID));
+    const trigger = page.getByRole("banner").getByRole("button", { name: "Wedding menu" });
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "Team and sharing" }).click();
+    const sheet = page.getByRole("dialog", { name: "Team and sharing" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Send invite" })).toBeVisible();
+    await expect(sheet.getByRole("group", { name: "Budget" })).toBeVisible();
+    // The menu's close animation must finish first, or its layer takes the Escape.
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
+    await expect(trigger).toBeFocused();
   });
 });

@@ -41,13 +41,25 @@ export type GuestRouteDeps = {
   services: Services;
   resolve: GuestTokenResolver;
   limit: GuestLimiter;
+  /** Fetches the signed Storage URL on the server; tests inject one. */
+  fetchImage?: (url: string) => Promise<Response>;
 };
 
 export type GuestRoutes = {
   revision(req: Request, token: string): Promise<Response>;
   rsvp(req: Request, token: string): Promise<Response>;
   dietary(req: Request, token: string): Promise<Response>;
+  photo(req: Request, token: string): Promise<Response>;
 };
+
+/** The couple photo's types (domain 5.5): anything else is never passed through. */
+const PHOTO_TYPES: ReadonlySet<string> = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/** How long the server waits for Storage before answering the 404. */
+export const PHOTO_FETCH_TIMEOUT_MS = 8_000;
+
+const fetchSignedImage = (url: string) =>
+  fetch(url, { redirect: "error", cache: "no-store", signal: AbortSignal.timeout(PHOTO_FETCH_TIMEOUT_MS) });
 
 /** The one body every bad token and every out-of-scope id gets: Lane A's (G5, R9, AT-9.4). */
 export const GUEST_NOT_FOUND_BODY: GuestErrorBody = { ok: false, error: { ...SHARED_NOT_FOUND } };
@@ -161,7 +173,7 @@ function guarded(handler: (req: Request, token: string) => Promise<Response>) {
   };
 }
 
-export function createGuestRoutes({ services, resolve, limit }: GuestRouteDeps): GuestRoutes {
+export function createGuestRoutes({ services, resolve, limit, fetchImage = fetchSignedImage }: GuestRouteDeps): GuestRoutes {
   async function viewAfter(response: CommandResponse, token: string): Promise<GuestInvitationView | null> {
     if (!response.ok) return null;
     // submit_rsvp returns the refreshed view; set_dietary's result is untyped, so re-read.
@@ -187,6 +199,30 @@ export function createGuestRoutes({ services, resolve, limit }: GuestRouteDeps):
       const revision = await services.guestRevision(token);
       if (revision === null) return notFound();
       return json({ revision }, 200);
+    }),
+
+    photo: guarded(async (req, token) => {
+      // Its own per-token budget, so a page's images never eat its poll or replies; the
+      // per-IP ceiling is shared (domain 6.3).
+      const hash = guestTokenHash(token);
+      const decision = await limit({ token_hash: hash ? `photo:${hash}` : null, ip: clientIpFrom(req.headers), kind: "get" });
+      if (!decision.allowed) return rateLimitedResponse(decision.retry_after_s);
+      const view = await services.guestInvitationView(token);
+      const url = view?.wedding.photo_url;
+      if (!url || !/^https:\/\//i.test(url)) return notFound();
+
+      let upstream: Response;
+      try {
+        upstream = await fetchImage(url);
+      } catch {
+        return notFound();
+      }
+      const type = (upstream.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+      if (!upstream.ok || !upstream.body || !PHOTO_TYPES.has(type)) return notFound();
+      const headers: Record<string, string> = { ...GUEST_RESPONSE_HEADERS, "Content-Type": type, "X-Content-Type-Options": "nosniff" };
+      const length = upstream.headers.get("content-length");
+      if (length && /^\d+$/.test(length)) headers["Content-Length"] = length;
+      return new Response(upstream.body, { status: 200, headers });
     }),
 
     rsvp: guarded(async (req, token) => {
