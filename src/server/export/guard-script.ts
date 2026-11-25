@@ -42,14 +42,20 @@ async (budgetMs) => {
     const text = (el.textContent || "").trim();
     if (!text) continue;
     const cs = getComputedStyle(el);
-    const font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
-    const primary = cleanFamily(cs.fontFamily.split(",")[0] || "unknown");
+    // Only the element's primary family, the web face. next/font's fallback faces use
+    // local() fonts (Times New Roman, Arial) that Sparticuz doesn't ship, and asking for
+    // the whole family list makes load() reject on Vercel even when the web face loaded.
+    const primaryRaw = (cs.fontFamily.split(",")[0] || "").trim();
+    const primary = cleanFamily(primaryRaw || "unknown");
     let faces = [];
-    try {
-      const result = await within(document.fonts.load(font, text), left());
-      faces = result === "__timeout__" ? [] : Array.from(result);
-    } catch (error) {
-      faces = [];
+    if (primaryRaw && !isFallback(primaryRaw)) {
+      const font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + primaryRaw;
+      try {
+        const result = await within(document.fonts.load(font, text), left());
+        faces = result === "__timeout__" ? [] : Array.from(result);
+      } catch (error) {
+        faces = [];
+      }
     }
     const web = faces.filter((face) => face.status === "loaded" && !isFallback(face.family));
     if (web.length === 0) missing.add(primary + (el.getAttribute("lang") === "hi" ? " (Devanagari)" : ""));

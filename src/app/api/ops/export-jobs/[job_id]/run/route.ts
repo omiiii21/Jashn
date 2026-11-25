@@ -14,7 +14,7 @@ import { OPS_HEADERS, opsError, opsNotFound, opsUnauthenticated } from "@/server
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
-const TEST_MODES: readonly RenderTestMode[] = ["block_fonts", "hang"];
+const TEST_MODES: readonly RenderTestMode[] = ["block_fonts", "hang", "broken_fallbacks"];
 
 /** Test-only modes (EX-07, EX-17) are refused in production builds and on Vercel. */
 function testMode(request: Request): RenderTestMode | null | "refused" {

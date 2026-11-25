@@ -48,8 +48,24 @@ export type RenderTimings = {
   fit: string;
 };
 
-/** Test-only modes, refused in production (export-and-recovery 8.1, EX-07 and EX-17). */
-export type RenderTestMode = "block_fonts" | "hang";
+/**
+ * Test-only modes, refused in production (export-and-recovery 8.1, EX-07 and EX-17).
+ * `broken_fallbacks` makes next/font's local() fallback faces fail to load, as they do on
+ * Vercel where Sparticuz ships only Open Sans: the card must still pass the guard.
+ */
+export type RenderTestMode = "block_fonts" | "hang" | "broken_fallbacks";
+
+/** Adds a failing local() face under every fallback family name, before the guard runs. */
+const BREAK_FALLBACKS_SCRIPT = `(() => {
+  const added = [];
+  for (const face of Array.from(document.fonts)) {
+    if (!/fallback/i.test(face.family)) continue;
+    const broken = new FontFace(face.family, "local('No Such Font For Jashn Tests')", { style: face.style, weight: face.weight });
+    document.fonts.add(broken);
+    added.push(broken.load().catch(() => null));
+  }
+  return Promise.all(added).then(() => added.length);
+})()`;
 
 export type RenderCardOptions = {
   /** The full render page URL, token included. Never logged. */
@@ -205,6 +221,10 @@ export async function renderCardPng(options: RenderCardOptions): Promise<{ png: 
       timings.navigate_ms = Date.now() - navigateStarted;
       if (status !== 200) {
         throw new RenderError("RENDER_FAILED", `render page returned ${status || "no answer"}`, { ...timings });
+      }
+
+      if (options.test_mode === "broken_fallbacks") {
+        await capped(page.evaluate(BREAK_FALLBACKS_SCRIPT) as Promise<number>, deadline, timeoutError);
       }
 
       if (options.test_mode === "hang") {
