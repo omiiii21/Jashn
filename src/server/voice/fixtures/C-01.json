@@ -1,0 +1,11 @@
+{
+ "row_id": "C-01",
+ "start_state": "D0 with M-03's card open",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "हाँ, save करो",
+  "language_code": "hi-IN"
+ },
+ "llm": null,
+ "audio_text": null
+}

@@ -1,0 +1,38 @@
+{
+ "row_id": "S-02",
+ "start_state": "after S-01",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "साल 2026 है। दुल्हन Mira है और दूल्हा Kabir।",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "hinglish",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "set_wedding_profile",
+    "wedding_date": "2026-12-14",
+    "bride_name": "Mira",
+    "groom_name": "Kabir",
+    "heard": [
+     {
+      "field": "wedding_date",
+      "phrase": "साल 2026"
+     },
+     {
+      "field": "bride_name",
+      "phrase": "दुल्हन Mira"
+     },
+     {
+      "field": "groom_name",
+      "phrase": "दूल्हा Kabir"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}

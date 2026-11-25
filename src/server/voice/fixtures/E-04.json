@@ -1,0 +1,29 @@
+{
+ "row_id": "E-04",
+ "start_state": "D1",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Reception Lotus Hall में shift कर दो",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "hinglish",
+  "missing_fields": [],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "update_event",
+    "event_id": "EVT-REC",
+    "venue_name": "Lotus Hall",
+    "heard": [
+     {
+      "field": "venue_name",
+      "phrase": "Lotus Hall"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}
