@@ -38,6 +38,28 @@ const SIBLING_CLAIM: ToolArguments = {
   reply_language: "hinglish",
 };
 
+const SPLIT_INTO_A_NEW_PAYMENT: ToolArguments = {
+  intent: "act",
+  actions: [
+    { kind: "correct_payment", vendor_id: "VEN-CAT", payment_kind: "advance", previous_inr: 50000, heard: [{ field: "previous_inr", phrase: "चालीस हज़ार" }, { field: "payment_kind", phrase: "advance" }] },
+    { kind: "record_payment", vendor_id: "VEN-CAT", amount_inr: 40000, payment_kind: "advance", note: "Caterer ko advance diya gaya", heard: [{ field: "amount_inr", phrase: "चालीस हज़ार" }, { field: "payment_kind", phrase: "advance" }] },
+  ],
+  missing_fields: [],
+  reply: "Caterer ko advance chaalis hazaar diya gaya hai.",
+  reply_language: "hinglish",
+};
+
+const CORRECTED_TWICE: ToolArguments = {
+  intent: "act",
+  actions: [
+    { kind: "correct_payment", vendor_id: "VEN-CAT", payment_id: "PAY-01", previous_inr: 50000, user_claim_inr: 40000, heard: [{ field: "previous_inr", phrase: "pachaas hazaar" }, { field: "user_claim_inr", phrase: "chaalis hazaar" }] },
+    { kind: "correct_payment", vendor_id: "VEN-CAT", payment_id: "PAY-01", payment_kind: "advance", method: "upi", note: "Caterer advance corrected from 50000 to 40000", heard: [{ field: "payment_kind", phrase: "advance" }, { field: "method", phrase: "upi" }] },
+  ],
+  missing_fields: [],
+  reply: "Caterer ka advance sahi kar diya.",
+  reply_language: "hinglish",
+};
+
 describe("soleAmount", () => {
   it("reads the one amount a sentence says", () => {
     expect(soleAmount(TRANSCRIPT, null)).toEqual({ value: 40000, phrase: "chaalis hazaar" });
@@ -52,7 +74,17 @@ describe("soleAmount", () => {
 });
 
 describe("M-03 from the live tool calls", () => {
-  for (const [name, tool] of [["no amount", NO_AMOUNT], ["heard words in another script, and a sibling claim", OTHER_SCRIPT_AND_SIBLING], ["a sibling claim", SIBLING_CLAIM]] as const) {
+  it("gives one correction card when the same payment is corrected twice", async () => {
+    const actor = { ...fixtureSessionActor("mira", "demo"), wedding_id: fixtureIds("demo").wedding_id };
+    const snapshot = await buildSnapshot({ actor, wedding_id: actor.wedding_id, context: null, attached_asset_id: null });
+    const outcome = await resolveTurn({ actor, wedding_id: actor.wedding_id, tool: cleanToolArguments(structuredClone(CORRECTED_TWICE)), snapshot, transcript: "Caterer ka advance pachaas hazaar nahi, chaalis hazaar tha.", register: "hinglish", ui_language: "en", writes_enabled: true, context: null, page: null, setup_opened_at: null });
+    expect(outcome.kind).toBe("preview");
+    if (outcome.kind !== "preview") return;
+    expect(outcome.actions).toHaveLength(1);
+    expect(outcome.actions[0].input.amount_inr).toBe(40000);
+  });
+
+  for (const [name, tool] of [["no amount", NO_AMOUNT], ["heard words in another script, and a sibling claim", OTHER_SCRIPT_AND_SIBLING], ["a sibling claim", SIBLING_CLAIM], ["a correction split into a new payment", SPLIT_INTO_A_NEW_PAYMENT]] as const) {
     it(`gives the correction card for ${name}`, async () => {
       const actor = { ...fixtureSessionActor("mira", "demo"), wedding_id: fixtureIds("demo").wedding_id };
       const snapshot = await buildSnapshot({ actor, wedding_id: actor.wedding_id, context: null, attached_asset_id: null });

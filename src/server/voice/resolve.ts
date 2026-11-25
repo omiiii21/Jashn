@@ -442,6 +442,31 @@ async function fillRefsFromTranscript(ctx: ResolveContext, access: ReadAccess): 
     }
     return next;
   });
+  // A correction the model split in two (live M-03: correct_payment with only previous_inr, plus
+  // a record_payment of the said amount to the same vendor): one sentence is one correction, never
+  // a new payment as well. The payment's amount goes to the correction, and the payment goes.
+  const splitPayments = new Set<number>();
+  for (const correction of actions) {
+    if (correction.kind !== "correct_payment" || !said(correction.vendor_id)) continue;
+    for (const [pi, payment] of actions.entries()) {
+      if (payment.kind !== "record_payment" || payment.vendor_id !== correction.vendor_id || typeof payment.amount_inr !== "number") continue;
+      if (typeof correction.amount_inr !== "number") {
+        correction.amount_inr = payment.amount_inr;
+        const heardAmount = (payment.heard ?? []).find((h) => h.field === "amount_inr");
+        if (heardAmount) correction.heard = [...(correction.heard ?? []).filter((h) => h.field !== "amount_inr"), heardAmount];
+      }
+      if (correction.amount_inr === payment.amount_inr) splitPayments.add(pi);
+    }
+  }
+  // The same payment corrected twice (live, "pachaas hazaar nahi, chaalis hazaar tha": a second
+  // correct_payment of PAY-01 with only invented fields): the first one stands.
+  actions.forEach((later, li) => {
+    if (later.kind !== "correct_payment") return;
+    const first = actions.findIndex((a, fi) => fi < li && a.kind === "correct_payment" && !splitPayments.has(fi) &&
+      (said(a.payment_id) && said(later.payment_id) ? a.payment_id === later.payment_id : said(a.vendor_id) && a.vendor_id === later.vendor_id));
+    if (first < 0) return;
+    if (typeof later.amount_inr !== "number" || later.amount_inr === actions[first].amount_inr) splitPayments.add(li);
+  });
   // A claim the model also put on a sibling balance question (live M-03: query_balance
   // user_claim_inr 40000 beside the correct_payment of 40000) is the payment's amount, not a claim
   // to check: the question goes, and with it the "Nahi, … baaki hai" rebuttal.
@@ -451,6 +476,7 @@ async function fillRefsFromTranscript(ctx: ResolveContext, access: ReadAccess): 
   // A question nobody asked (V-T4, O-01: a query_budget next to "Caterer को अब कितना देना है?").
   const keep = actions.map((action) => {
     if (action.kind === "query_balance" && typeof action.user_claim_inr === "number" && paidAmounts.has(action.user_claim_inr)) return false;
+    if (splitPayments.has(actions.indexOf(action))) return false;
     const cues = ASK_CUES[action.kind];
     return !cues || cues.some((word) => hasWords(transcript, word));
   });
