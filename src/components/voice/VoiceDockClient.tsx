@@ -933,6 +933,8 @@ export function VoiceDockClient(props: VoiceDockClientProps) {
   }, [dockState, heardText]);
   useEffect(() => {
     toggleRef.current = () => {
+      // Lane C's guard (#42): ignored while the dock is off, as the disabled header mic is.
+      if (broadcastRef.current.state === "off") return;
       const m = micRef.current;
       if (m.kind === "idle") {
         unlockReplyAudio();
