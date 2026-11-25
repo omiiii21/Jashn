@@ -17,6 +17,7 @@ import { buildMoneySummary } from "@/server/read-models/money-summary";
 import { buildProposals } from "@/server/read-models/proposals";
 import { buildRsvpGuestList } from "@/server/read-models/rsvp-guest-list";
 import { buildRsvpTotals } from "@/server/read-models/rsvp-totals";
+import { buildTeam } from "@/server/read-models/team";
 import { buildVendorLedger } from "@/server/read-models/vendor-ledger";
 import { resolveGuestToken } from "@/server/authz/guest-token";
 import { signUploadForMember } from "@/server/storage/uploads";
@@ -94,6 +95,10 @@ const realServices: Services = {
       case "rsvp_guest_list": {
         await guardedSharing(name, request.actor, request.wedding_id);
         return (await buildRsvpGuestList(getDb(), request.actor, request.wedding_id, params as never)) as ReadModelResult<N>;
+      }
+      case "team": {
+        await guardedSharing(name, request.actor, request.wedding_id);
+        return (await buildTeam(getDb(), request.actor, request.wedding_id)) as ReadModelResult<N>;
       }
       default:
         // Seeded ids equal the fixture ids (D100), so a fixture read of a real wedding still
