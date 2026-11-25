@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { WeddingId } from "@/contracts/domain";
+import { useNewChanges } from "../activity/useNewChanges";
 import { cx } from "../kit/cx";
 
 import {
@@ -23,6 +24,7 @@ import {
   activeSection,
   sectionHref,
   type NavSection,
+  type SectionSeqs,
 } from "./nav-items";
 
 /** Phosphor's nav set (design-direction 6): Regular at 24 px, Fill only when active. */
@@ -36,7 +38,17 @@ const NAV_ICONS: Record<NavSection, Icon> = {
   activity: ClockCounterClockwiseIcon,
 };
 
-function RailLink({ wedding_id, section, active }: { wedding_id: WeddingId; section: NavSection; active: boolean }) {
+function RailLink({
+  wedding_id,
+  section,
+  active,
+  fresh,
+}: {
+  wedding_id: WeddingId;
+  section: NavSection;
+  active: boolean;
+  fresh: boolean;
+}) {
   const IconComponent = NAV_ICONS[section];
   return (
     <li>
@@ -50,6 +62,11 @@ function RailLink({ wedding_id, section, active }: { wedding_id: WeddingId; sect
       >
         <IconComponent size={24} weight={active ? "fill" : "regular"} aria-hidden="true" />
         <span>{SECTION_TITLES[section]}</span>
+        {fresh ? (
+          <span className="ml-auto size-2 rounded-full bg-gold">
+            <span className="sr-only">, new changes</span>
+          </span>
+        ) : null}
       </Link>
     </li>
   );
@@ -60,18 +77,28 @@ function RailLink({ wedding_id, section, active }: { wedding_id: WeddingId; sect
  * sections, then Activity. The active item is a maroon block with a filled icon and
  * `aria-current="page"`; no side bar.
  */
-export function PlannerNav({ wedding_id, className }: { wedding_id: WeddingId; className?: string }) {
+export function PlannerNav({
+  wedding_id,
+  className,
+  latest = {},
+}: {
+  wedding_id: WeddingId;
+  className?: string;
+  /** The newest activity seq per section, for the gold dot (brief B3). */
+  latest?: SectionSeqs;
+}) {
   const current = activeSection(usePathname(), wedding_id);
+  const fresh = useNewChanges(wedding_id, current as NavSection | null, latest);
   return (
     <nav aria-label="Wedding sections" className={className}>
       <ul className="flex flex-col gap-2">
         {PRIMARY_SECTIONS.map((section) => (
-          <RailLink key={section} wedding_id={wedding_id} section={section} active={current === section} />
+          <RailLink key={section} wedding_id={wedding_id} section={section} active={current === section} fresh={fresh.has(section)} />
         ))}
       </ul>
       <ul className="mt-4 flex flex-col gap-2 border-t border-maroon pt-4">
         {SECONDARY_SECTIONS.map((section) => (
-          <RailLink key={section} wedding_id={wedding_id} section={section} active={current === section} />
+          <RailLink key={section} wedding_id={wedding_id} section={section} active={current === section} fresh={fresh.has(section)} />
         ))}
       </ul>
     </nav>
