@@ -15,6 +15,8 @@ import { routes } from "../src/contracts/routes";
 /** Rehearsal copy `b` and its caterer (demo-data; the fixture ids). */
 const WEDDING_ID = "3e546e78-a307-5757-a6e2-2b08e26c0a76";
 const CATERER_ID = "7cfd20aa-ff4c-5e4b-9fc9-468eb0914704";
+/** fixtureIds("b").reception_event_id: the reception, EVT-REC. */
+const RECEPTION_ID = "692a852e-0a73-5cbd-b4bf-46c2ad3a803e";
 const OWNER_EMAIL = "mira.b@example.com";
 
 /** Acceptance 6.4: every planner screen at these widths. */
@@ -357,5 +359,193 @@ test.describe("focus after a route change (acceptance 6.5)", () => {
     await page.keyboard.press("Enter");
     await page.waitForURL((url) => !url.searchParams.has("vendor_id"));
     await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("main");
+  });
+});
+
+/** No horizontal page scroll at the current viewport (acceptance 6.4). */
+async function expectNoSideways(page: Page, at: string): Promise<void> {
+  await settle(page);
+  const { scrollWidth, innerWidth } = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth: window.innerWidth,
+  }));
+  expect(scrollWidth, `${at}: no horizontal page scroll`).toBeLessThanOrEqual(innerWidth);
+}
+
+test.describe("Money at D0 (AT-5.1, AT-5.2)", () => {
+  test("the four figures, Not yet committed, Catering, Mallige Gardens due soon and PRP-01", async ({ page }) => {
+    await open(page, routes.money(WEDDING_ID));
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { level: 1 })).toHaveText("Money");
+    await expect(page).toHaveTitle("Money, Mira & Kabir");
+
+    // Budget, Committed, Paid and Still owed, each on its own, then Not yet committed.
+    const totals = main.locator("section").filter({ has: page.getByRole("heading", { name: "Budget and spending" }) });
+    const rows = totals.locator("dl");
+    await expect(rows.locator('[data-field="budget_inr"]')).toHaveText("₹12,00,000");
+    await expect(rows.locator('[data-field="total_committed_inr"]')).toHaveText("₹9,27,000");
+    await expect(rows.locator('[data-field="total_paid_inr"]')).toHaveText("₹3,97,000");
+    await expect(rows.locator('[data-field="total_outstanding_inr"]')).toHaveText("₹5,30,000");
+    await expect(rows.locator('[data-field="uncommitted_inr"]')).toHaveText("₹2,73,000");
+    await expect(rows).toContainText("Still owed");
+    await expect(rows).toContainText("Not yet committed");
+    await expect(totals).toContainText(
+      "Of the ₹12,00,000 budget, ₹9,27,000 is committed and ₹3,97,000 is paid, so ₹5,30,000 is still owed.",
+    );
+    await expect(main).not.toContainText("Outstanding");
+
+    // The Catering line of the category table.
+    const catering = main.locator('tr[data-category="catering"]');
+    await expect(catering).toHaveCount(1);
+    await expect(catering).toContainText("Catering");
+    await expect(catering.locator('[data-field="categories.planned_inr"]')).toHaveText("₹2,40,000");
+    await expect(catering.locator('[data-field="categories.committed_inr"]')).toHaveText("₹2,00,000");
+    await expect(catering.locator('[data-field="categories.paid_inr"]')).toHaveText("₹50,000");
+    await expect(catering.locator('[data-field="categories.outstanding_inr"]')).toHaveText("₹1,50,000");
+    await expect(catering.locator('[data-field="categories.uncommitted_inr"]')).toHaveText("₹40,000");
+
+    // Mallige Gardens' balance is due soon: amber, with an icon and words.
+    const vendors = main.locator("section").filter({ has: page.getByRole("heading", { name: "Vendors", exact: true }) });
+    const mallige = vendors.locator("tr").filter({ has: page.getByRole("link", { name: "Mallige Gardens" }) });
+    await expect(mallige).toHaveCount(1);
+    await expect(mallige.locator('[data-field="outstanding_inr"]')).toHaveText("₹1,40,000");
+    await expect(mallige.locator('[data-status="due"]')).toHaveText(/^Due Tue 1 Dec/);
+    await expect(
+      vendors.locator("tr").filter({ has: page.getByRole("link", { name: "Annapoorna Caterers" }) }),
+    ).toContainText("₹1,50,000");
+
+    // PRP-01: a peacock "Proposed" row, its own figure never in a total, Approve and Decline.
+    const approvals = main.locator("section").filter({ has: page.getByRole("heading", { name: "Waiting for your approval" }) });
+    const proposal = approvals.locator('li[data-proposal="PRP-01"]');
+    await expect(proposal).toHaveCount(1);
+    await expect(proposal.locator('[data-status="proposed"]')).toHaveText("Proposed");
+    await expect(proposal).toContainText("Diya proposed an expense of ₹15,000 to Dhol player (Music and entertainment)");
+    await expect(proposal.locator('[data-field="committed_delta_inr"]')).toHaveText("+₹15,000");
+    await expect(proposal.getByRole("button", { name: "Approve" })).toBeVisible();
+    await expect(proposal.getByRole("button", { name: "Decline" })).toBeVisible();
+    await expect(approvals.locator('[data-field="if_approved_committed_inr"]')).toHaveText("₹9,42,000");
+  });
+});
+
+test.describe("correcting PAY-01 on the vendor page (AT-5.6)", () => {
+  test("Correct payment refuses 40k next to the field and saves 40,000 with a receipt", async ({ page }) => {
+    await open(page, routes.vendor(WEDDING_ID, CATERER_ID));
+    const main = page.getByRole("main");
+    const advance = main.getByRole("listitem").filter({ hasText: "PAY-01" });
+    await expect(advance).toHaveCount(1);
+
+    await advance.getByRole("button", { name: "Correct payment" }).click();
+    const amount = advance.getByLabel("Correct amount");
+    await expect(amount).toBeVisible();
+    await expectNoSideways(page, "the open correction form");
+
+    // Refused next to the field, before anything is sent.
+    await amount.fill("40k");
+    await advance.getByRole("button", { name: "Save correction" }).click();
+    await expect(amount).toHaveAttribute("aria-invalid", "true");
+    await expect(amount).toHaveAccessibleDescription(/digits only, like 40,000 or 40000/);
+    await expect(main.getByRole("status").filter({ hasText: "Saved by" })).toHaveCount(0);
+
+    // Accepted with Indian grouping; the fixture answers "applied" and the receipt line stays.
+    await amount.fill("40,000");
+    await advance.getByRole("button", { name: "Save correction" }).click();
+    const receipt = advance.getByRole("status").filter({ hasText: /^Saved by Mira, \d{1,2}:\d{2} (am|pm)\./ });
+    await expect(receipt).toBeVisible({ timeout: 15_000 });
+    await expect(receipt.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(amount).toBeHidden();
+  });
+});
+
+test.describe("Events at D0 (AT-3.1)", () => {
+  test("five functions over two days, the two warnings and revision 2", async ({ page }) => {
+    await open(page, routes.events(WEDDING_ID));
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { level: 1 })).toHaveText("Events");
+    await expect(page).toHaveTitle("Events, Mira & Kabir");
+    await expect(main).toContainText("No unpublished changes.");
+    await expect(main).toContainText("Published as revision 2");
+
+    const days = main.locator('section[aria-labelledby^="day-"]');
+    await expect(days).toHaveCount(2);
+    await expect(days.nth(0).getByRole("heading")).toHaveText("Sun 13 Dec 2026");
+    await expect(days.nth(1).getByRole("heading")).toHaveText("Mon 14 Dec 2026");
+    const first = days.nth(0).getByRole("listitem");
+    const second = days.nth(1).getByRole("listitem");
+    await expect(first).toHaveCount(3);
+    await expect(second).toHaveCount(2);
+    for (const [index, title] of ["Haldi", "Mehendi", "Sangeet"].entries()) await expect(first.nth(index)).toContainText(title);
+    for (const [index, title] of ["Wedding", "Reception"].entries()) await expect(second.nth(index)).toContainText(title);
+
+    // The two warnings, in their rows: the overlap on both functions, the capacity on the reception.
+    const overlap = main.locator("p").filter({ hasText: "The Mehendi ends at 19:30 but the Sangeet starts at 19:00" });
+    await expect(overlap).toHaveCount(2);
+    await expect(first.nth(1)).toContainText("30 minutes overlap");
+    await expect(first.nth(2)).toContainText("30 minutes overlap");
+    await expect(second.nth(1)).toContainText("Banyan Hall seats 220; 229 are attending the reception.");
+    await expect(main.locator("p").filter({ hasText: "Banyan Hall seats 220" })).toHaveCount(1);
+  });
+
+  test("the reception's detail has the Venue select and Save draft", async ({ page }) => {
+    await open(page, routes.events(WEDDING_ID, RECEPTION_ID));
+    const main = page.getByRole("main");
+    await expect(page).toHaveTitle("Reception, Mira & Kabir");
+    const detail = main.getByRole("article").filter({ has: page.getByRole("heading", { name: /^Reception/ }) });
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText("Banyan Hall seats 220; 229 are attending the reception.");
+
+    const venue = detail.getByLabel("Venue", { exact: true });
+    await expect(venue).toBeVisible();
+    await expect(venue.locator("option:checked")).toHaveText(/^Banyan Hall, Mallige Gardens, seats 220/);
+    await expect(venue.locator("option")).toContainText([/^Lotus Hall/]);
+    await expect(detail.getByRole("button", { name: "Save draft" })).toBeVisible();
+    await expect(detail.getByRole("button", { name: "Add requirement" })).toBeVisible();
+    await expectNoSideways(page, "the reception's detail");
+  });
+});
+
+test.describe("Activity at D0 (AT-8.5)", () => {
+  test("the seeded entries, newest first, in the read model's words", async ({ page }) => {
+    await open(page, routes.activity(WEDDING_ID));
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { level: 1 })).toHaveText("Activity");
+    await expect(page.getByRole("navigation", { name: "Filter the activity" })).toBeVisible();
+
+    const entries = main.locator("li[data-seq]");
+    await expect(entries).toHaveCount(5);
+    const seqs = (await entries.evaluateAll((items) => items.map((item) => Number(item.getAttribute("data-seq"))))).filter(
+      (seq) => Number.isFinite(seq),
+    );
+    expect(seqs, "newest first").toEqual([...seqs].sort((a, b) => b - a));
+    await expect(main).toContainText(
+      "Diya proposed an expense of ₹15,000 to Dhol player (Music and entertainment), not yet paid. It needs an owner's approval.",
+    );
+    await expect(main).toContainText("Diya added a requirement to the reception: Sugar-free dessert option, for Kamla Arora.");
+  });
+});
+
+test.describe("Guests at D0 (AT-4.2, AT-4.8, AT-9.6)", () => {
+  test("the reply table, the imported guests and Tara's phone for Mira", async ({ page }) => {
+    await open(page, routes.guests(WEDDING_ID));
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { level: 1 })).toHaveText("Guests");
+
+    const replies = main.locator("section").filter({ has: page.getByRole("heading", { name: "Replies by function" }) });
+    await expect(replies.getByRole("columnheader", { name: "Expected (planning)" })).toHaveCount(1);
+    const reception = replies.locator(`tr[data-event-id="${RECEPTION_ID}"]`);
+    await expect(reception).toHaveCount(1);
+    await expect(reception.locator('[data-field="invited"]')).toHaveText("250");
+    await expect(reception.locator('[data-field="attending"]')).toHaveText("229");
+    await expect(reception.locator('[data-field="declined"]')).toHaveText("9");
+    await expect(reception.locator('[data-field="pending"]')).toHaveText("12");
+    await expect(reception.locator('[data-field="expected_headcount"]')).toHaveText("250");
+
+    await expect(main.getByText("210 imported guests (synthetic placeholders)", { exact: true })).toBeVisible();
+    await expect(main.locator("[data-household-id]")).toHaveCount(16);
+    await expect(main.locator("[data-guest-id]")).toHaveCount(40);
+
+    const tara = main.locator("[data-guest-id]").filter({ hasText: "Tara Bhat" });
+    await expect(tara).toHaveCount(1);
+    await expect(tara.locator('[data-field="phone"]')).toHaveText("+91 90000 01601");
+    await expectNoSideways(page, "Guests");
   });
 });
