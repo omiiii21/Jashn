@@ -17,6 +17,7 @@ import {
 import { routes } from "@/contracts/routes";
 import { draftCardModel } from "./draft-card";
 import { PhotoField } from "./PhotoField";
+import { PhotoPicker } from "./PhotoPicker";
 import { StudioPreview } from "./StudioPreview";
 import { FIELD_CLASS, PRIMARY_BUTTON_CLASS } from "./studio-styles";
 import {
@@ -212,7 +213,9 @@ export function InviteStudio(props: InviteStudioProps) {
 
   const photoUrl = shown.photo_asset_id
     ? (localPhotos[shown.photo_asset_id] ??
-      (props.photo?.asset_id === shown.photo_asset_id ? props.photo.url : null))
+      (props.photo?.asset_id === shown.photo_asset_id ? props.photo.url : null) ??
+      props.photos.find((photo) => photo.asset_id === shown.photo_asset_id)?.url ??
+      null)
     : null;
 
   const model = useMemo(
@@ -419,6 +422,18 @@ export function InviteStudio(props: InviteStudioProps) {
           ) : null}
           <FieldError id="studio-blessing-error" text={blessingError} />
         </div>
+
+        <PhotoPicker
+          photos={props.photos}
+          selected={shown.photo_asset_id}
+          on_select={(asset_id) => edit("photo_asset_id", asset_id)}
+          is_sample={is_sample}
+          on_image_error={() => {
+            if (refreshedForImage.current) return;
+            refreshedForImage.current = true;
+            router.refresh();
+          }}
+        />
 
         <PhotoField
           wedding_id={wedding_id}

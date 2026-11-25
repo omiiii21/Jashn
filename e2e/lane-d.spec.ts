@@ -388,4 +388,22 @@ test.describe("Invite page", () => {
     }, viewport);
     expect(overflowing).toBe(0);
   });
+
+  test("AT-7.1 (typed path): the studio previews the draft, and a colour change shows at once", async ({ page }) => {
+    const wedding = "3f71c430-a498-531f-a2ed-12e2267e7ccf";
+    const response = await page.goto(`/w/${wedding}/invite`);
+    test.skip(response?.status() !== 200, "the fixture member isn't served here (live auth is on)");
+    const preview = page.getByRole("img", { name: /^Invitation preview: / });
+    await expect(preview).toBeVisible();
+    await expect(preview).toHaveAttribute("aria-label", /Maroon/);
+    await expect(page.getByRole("button", { name: "Save draft" })).toBeVisible();
+    // The label's own activation: the page scrolls smoothly, so a pointer click aimed while
+    // it moves can land on the neighbouring option.
+    await page.locator('label[for="studio-theme-peacock_gold"]').dispatchEvent("click");
+    await expect(preview).toHaveAttribute("aria-label", /Peacock/);
+    // The preview's card sits inside its box: scaled from the corner, never off to one side.
+    const [box, card] = await Promise.all([preview.boundingBox(), preview.locator("[data-card-root]").boundingBox()]);
+    expect(Math.abs((card?.x ?? -1) - (box?.x ?? 0))).toBeLessThanOrEqual(1);
+    expect(Math.abs((card?.y ?? -1) - (box?.y ?? 0))).toBeLessThanOrEqual(1);
+  });
 });
