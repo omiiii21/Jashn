@@ -47,6 +47,7 @@ import type { VoiceDockFlags } from "@/contracts/flags";
 import { dockCopy, receiptTime, type DockCopy } from "./dock-copy";
 import { fixtureRowSetting, speechLanguageSetting, useFixtureRow, useOnline, useRecorderChoice, useSpeechLanguage } from "./dock-settings";
 import { prefillTargetPath, setVoicePrefill } from "./prefill-store";
+import type { FlagDrawerData } from "./drawer-types";
 import { ReasonChips } from "./ReasonChip";
 import {
   AMBER_MS,
@@ -79,6 +80,8 @@ export type VoiceDockClientProps = {
   is_internal: boolean;
   /** The one command action (D98), for Undo (voice.md 5.5). Undo itself is a follow-up. */
   dispatchCommand: (envelope: CommandEnvelope) => Promise<CommandResponse>;
+  /** The flags drawer's data and actions (flagsmith 5.9): internal accounts only, else null. */
+  drawer?: FlagDrawerData | null;
 };
 
 /** The browser gives up on a turn after 45 s (voice.md 1.16). */
@@ -941,7 +944,7 @@ export function VoiceDockClient(props: VoiceDockClientProps) {
           />
         </form>
       ) : null}
-      <ReasonChips flags={voice} ui_language={props.ui_language} />
+      <ReasonChips flags={voice} ui_language={props.ui_language} drawer={props.drawer ?? null} />
       {props.fixture_mode && !voiceOff ? (
         // Fixture mode is labelled on the dock itself (voice.md 6.4, AT-2.10); the picker is in the panel.
         <button
