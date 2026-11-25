@@ -6,7 +6,7 @@ import type { ActivityFeedEntry, Itinerary, ItineraryFunction } from "@/contract
 import { routes, withHighlight } from "@/contracts/routes";
 
 import { checkValue, createReadAccess, fold, formatLongDate, formatTime, formatWeekdayDate, formatWeekdayDateHi, hasWords, resolveEvent, resolveMember, resolveVendor, roleOrName, speakTimeEn, type ReadAccess, type VendorRef } from "./resolve/support";
-import { clockHi, clockHinglish, countHi, formatInr, inrWords, spoken } from "./resolve/say";
+import { clockHi, clockHinglish, clockHinglishWords, countHi, countHinglish, formatInr, inrWords, spoken } from "./resolve/say";
 import { reply, shagunNotSetUp } from "./templates";
 import type { ReplyText, ResolveContext, Snapshot, StoredOption, ToolAction } from "./types";
 
@@ -445,14 +445,9 @@ function venueChange(entry: ActivityFeedEntry): { from: string; to: string } | n
 }
 
 const EN_COUNTS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
-const HINGLISH_COUNTS = ["", "ek", "do", "teen", "char", "paanch", "chhah", "saat", "aath", "nau", "das", "gyarah", "barah"];
 
 function countEn(n: number): string {
   return EN_COUNTS[n] ?? String(n);
-}
-
-function countHinglish(n: number): string {
-  return HINGLISH_COUNTS[n] ?? String(n);
 }
 
 /** The function an entry belongs to: the event itself, or the function holding the requirement. */
@@ -585,19 +580,6 @@ function twoNotes(entries: ActivityFeedEntry[], itinerary: Itinerary | null, act
   }
   const full = `आज ${actor} ने दो नोट जोड़े: ${a.tHi} में ${a.item}, और ${b.tHi} में ${b.item}।`;
   return reply(r, full.length <= 140 ? full : `आज ${actor} ने दो नोट जोड़े, ${a.tHi} और ${b.tHi} में।`);
-}
-
-/** Hinglish clock words in Latin for a reply line (4.10): "shaam saat baje", "shaam saade paanch baje". */
-export function clockHinglishWords(time: string): string {
-  const [h, m] = time.split(":").map(Number);
-  const daypart = h < 12 ? "subah" : h < 16 ? "dopahar" : h < 20 ? "shaam" : "raat";
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  const word = (n: number) => countHinglish(n);
-  if (m === 0) return `${daypart} ${word(hour12)} baje`;
-  if (m === 30) return `${daypart} saade ${word(hour12)} baje`;
-  if (m === 15) return `${daypart} sawa ${word(hour12)} baje`;
-  if (m === 45) return `${daypart} paune ${word(hour12 === 12 ? 1 : hour12 + 1)} baje`;
-  return clockHinglish(time);
 }
 
 function entrySentence(entry: ActivityFeedEntry, itinerary: Itinerary | null, r: ReplyRegister): ReplyText {
