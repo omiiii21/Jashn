@@ -491,6 +491,35 @@ describe("POST /api/voice/confirm", () => {
     expect((await state.store.get(voice_turn_id))?.status).toBe("proposed");
   });
 
+  it("re-resolves a 409 against the current record, stores the refreshed preview and saves on the next tap (1.13)", async () => {
+    let version = 1;
+    state.resolve = (ctx) => {
+      const preview = defaultResolve(ctx) as Extract<ResolveOutcome, { kind: "preview" }>;
+      return {
+        ...preview,
+        actions: preview.actions.map((action) => ({ ...action, input: { ...action.input, expected_version: version } })),
+      };
+    };
+    const voice_turn_id = await previewTurn();
+    const callsBefore = state.calls.callModel;
+    version = 2;
+    state.dispatchResponse = (envelope) =>
+      (envelope.input as { expected_version?: number }).expected_version === 2
+        ? okResponse(envelope)
+        : { ok: false, error: { code: "stale_version", message: "Changed meanwhile.", current: { version: 2 } } };
+    const first = await handleConfirm(jsonRequest("/api/voice/confirm", { voice_turn_id, via: "tap" }), deps());
+    expect(first.status).toBe(409);
+    const body = await first.json();
+    expect(body.preview).toMatchObject({ type: "preview", voice_turn_id, status: "proposed" });
+    const stored = await state.store.get(voice_turn_id);
+    expect(stored?.status).toBe("proposed");
+    expect(stored?.actions[0]?.input.expected_version).toBe(2);
+    expect(state.calls.callModel).toBe(callsBefore);
+    const second = await handleConfirm(jsonRequest("/api/voice/confirm", { voice_turn_id, via: "tap" }), deps());
+    expect(second.status).toBe(200);
+    expect(state.dispatched).toHaveLength(2);
+  });
+
   it("answers 403 forbidden for someone else's turn and for an unknown id (AT-2.8)", async () => {
     const voice_turn_id = await previewTurn();
     state.session = diya;

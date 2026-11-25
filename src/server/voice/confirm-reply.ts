@@ -6,7 +6,7 @@ import { PAYMENT_KIND_LABELS, type JsonObject, type JsonValue, type SessionActor
 import { routes, withHighlight } from "@/contracts/routes";
 
 import { factsOf, labelsFor, labelOf, SERVER_FACTS_KEY } from "./preview";
-import { countHi, formatInr, inrWords } from "./resolve/say";
+import { clockHinglishWords, countHi, formatInr, inrWords } from "./resolve/say";
 import { AMOUNT_FIELDS, COUNT_FIELDS, formatDate, formatLongDate, formatTime, speakTimeEn } from "./resolve/support";
 import { clockHi } from "./resolve/say";
 import { firstSentenceOf, joinReplies, reply } from "./templates";
@@ -169,7 +169,7 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
       const kind = facts.payment_kind ? PAYMENT_KIND_LABELS[facts.payment_kind].in_sentence : "payment";
       const who = facts.role_is_unique ? `the ${facts.role_en}'s` : `${facts.vendor_name}'s`;
       const display = `Corrected ${who} ${kind}${amount !== undefined ? ` to ${formatInr(amount)}` : ""}.${outstanding !== null ? ` ${formatInr(outstanding)} is outstanding.` : ""}`;
-      return { reply: reply(r === "en" ? r : r, display, display.replace(/₹[0-9,]+/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en"))), navigate_path: path };
+      return { reply: reply(r === "en" ? r : r, display, display.replace(/₹[0-9](?:[0-9,]*[0-9])?/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en"))), navigate_path: path };
     }
     case "record_payment": {
       const path = vendorPath(wedding_id, facts);
@@ -181,7 +181,7 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
       if (r === "en") {
         const tail = outstanding === null ? "" : outstanding === 0 ? ` ${facts.vendor_name} is paid in full.` : ` ${formatInr(outstanding)} is still owed.`;
         const display = `Saved a ${formatInr(amount)} ${kind} to ${facts.vendor_name}.${tail}`;
-        return { reply: reply(r, display, display.replace(/₹[0-9,]+/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en"))), navigate_path: path };
+        return { reply: reply(r, display, display.replace(/₹[0-9](?:[0-9,]*[0-9])?/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en"))), navigate_path: path };
       }
       const who = facts.role_is_unique ? capitalize(facts.role_en ?? "") : (facts.vendor_name ?? "");
       if (r === "hinglish") {
@@ -196,25 +196,33 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
       const path = vendorPath(wedding_id, facts);
       const amount = typeof input.amount_inr === "number" ? input.amount_inr : 0;
       const outstanding = totals?.outstanding_inr ?? null;
+      // M-08 (4.10): the over-budget clause the preview already warned about.
+      const over = typeof facts.over_budget_inr === "number" && facts.over_budget_inr > 0 ? facts.over_budget_inr : null;
+      const label = facts.over_budget_label_en ?? "the category";
+      const labelHi = facts.over_budget_label_hi ?? label;
       if (r === "en") {
-        const display = `The agreed amount with ${facts.vendor_name} is now ${formatInr(amount)}.${outstanding !== null ? ` ${formatInr(outstanding)} is still owed.` : ""}`;
-        return { reply: reply(r, display, display.replace(/₹[0-9,]+/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en"))), navigate_path: path };
+        const owed = outstanding !== null ? ` ${formatInr(outstanding)} is still owed${over !== null ? `, and ${label} is ${formatInr(over)} over budget` : ""}.` : "";
+        const display = `The agreed amount with ${facts.vendor_name} is now ${formatInr(amount)}.${owed}`;
+        return { reply: reply(r, display, display.replace(/₹[0-9](?:[0-9,]*[0-9])?/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en"))), navigate_path: path };
       }
       const who = facts.role_is_unique ? capitalize(facts.role_en ?? "") : (facts.vendor_name ?? "");
       if (r === "hinglish") {
+        const owed = outstanding !== null ? ` ${formatInr(outstanding)} baaki hai${over !== null ? `, aur ${label} budget se ${formatInr(over)} upar hai` : ""}.` : "";
+        const owedDev = outstanding !== null ? ` ${inrWords(outstanding, "hi")} बाकी है${over !== null ? `, और ${label} budget से ${inrWords(over, "hi")} ऊपर है` : ""}।` : "";
         return {
-          reply: reply(r, `${who} ka contract ${formatInr(amount)} ho gaya.${outstanding !== null ? ` ${formatInr(outstanding)} baaki hai.` : ""}`, `${who} का contract ${inrWords(amount, "hi")} हो गया।${outstanding !== null ? ` ${inrWords(outstanding, "hi")} बाकी है।` : ""}`),
+          reply: reply(r, `${who} ka contract ${formatInr(amount)} ho gaya.${owed}`, `${who} का contract ${inrWords(amount, "hi")} हो गया।${owedDev}`),
           navigate_path: path,
         };
       }
-      return { reply: reply(r, `${facts.vendor_name} के साथ तय रकम अब ${inrWords(amount, "hi")} है।${outstanding !== null ? ` ${inrWords(outstanding, "hi")} बाकी हैं।` : ""}`), navigate_path: path };
+      const owedHi = outstanding !== null ? ` ${inrWords(outstanding, "hi")} बाकी हैं${over !== null ? `, और ${labelHi} बजट से ${inrWords(over, "hi")} ऊपर है` : ""}।` : "";
+      return { reply: reply(r, `${facts.vendor_name} के साथ तय रकम अब ${inrWords(amount, "hi")} है।${owedHi}`), navigate_path: path };
     }
     case "record_commitment": {
       const path = vendorPath(wedding_id, facts);
       const amount = typeof input.amount_inr === "number" ? input.amount_inr : 0;
       const outstanding = totals?.outstanding_inr ?? null;
       const display = r === "en" ? `Saved a ${formatInr(amount)} commitment with ${facts.vendor_name}.${outstanding !== null ? ` ${formatInr(outstanding)} is outstanding.` : ""}` : `${formatInr(amount)} ka contract save ho gaya.${outstanding !== null ? ` ${formatInr(outstanding)} baaki hai.` : ""}`;
-      return { reply: reply(r, display, display.replace(/₹[0-9,]+/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), r === "en" ? "en" : "hi"))), navigate_path: path };
+      return { reply: reply(r, display, display.replace(/₹[0-9](?:[0-9,]*[0-9])?/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), r === "en" ? "en" : "hi"))), navigate_path: path };
     }
     case "update_event": {
       const changed = facts.changed_fields ?? [];
@@ -232,9 +240,21 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
       if (end || start) {
         const time = (end ?? start) as string;
         const verbEn = end ? "now ends" : "now starts";
-        if (r === "en") return { reply: reply(r, `The ${t} ${verbEn} at ${speakTimeEn(time)}.`), navigate_path: path };
-        if (r === "hinglish") return { reply: reply(r, `${title} ab ${formatTime(time)} ${end ? "khatam hogi" : "shuru hogi"}.`, `${title} अब ${clockHi(time)} ${end ? "ख़त्म होगी" : "शुरू होगी"}।`), navigate_path: path };
-        return { reply: reply(r, `${facts.event_title_hi ?? title} अब ${clockHi(time)} ${end ? "ख़त्म होगी" : "शुरू होगी"}।`), navigate_path: path };
+        // E-03 (4.10): the second sentence when the overlap goes away.
+        const other = facts.clash_cleared_with ?? null;
+        const otherHi = facts.clash_cleared_with_hi ?? other;
+        if (r === "en") return { reply: reply(r, `The ${t} ${verbEn} at ${speakTimeEn(time)}.${other ? ` The clash with the ${other.toLowerCase()} is gone.` : ""}`), navigate_path: path };
+        if (r === "hinglish") {
+          return {
+            reply: reply(
+              r,
+              `${title} ab ${clockHinglishWords(time)} ${end ? "khatam hogi" : "shuru hogi"}.${other ? ` ${other} se takraav hat gaya.` : ""}`,
+              `${title} अब ${clockHi(time)} ${end ? "ख़त्म होगी" : "शुरू होगी"}।${other ? ` ${otherHi} से टकराव हट गया।` : ""}`,
+            ),
+            navigate_path: path,
+          };
+        }
+        return { reply: reply(r, `${facts.event_title_hi ?? title} अब ${clockHi(time)} ${end ? "ख़त्म होगी" : "शुरू होगी"}।${other ? ` ${otherHi} से टकराव हट गया।` : ""}`), navigate_path: path };
       }
       if (r === "en") return { reply: reply(r, `Saved the ${t} in the draft. Guests see it once it's published.`), navigate_path: path };
       return { reply: reply(r, `${title} draft mein save ho gaya. Guests ko publish ke baad dikhega.`, `${title} draft में save हो गया। Guests को publish के बाद दिखेगा।`), navigate_path: path };
@@ -266,13 +286,19 @@ function oneReply(action: ResolvedAction, result: StoredResult | undefined, r: R
     case "request_card_export": {
       const path = wedding_id ? routes.invite(wedding_id) : null;
       const rev = facts.revision;
-      if (r === "en") return { reply: reply(r, `Making the card for revision ${rev ?? ""}.`.replace("revision .", "the latest revision.")), navigate_path: path };
-      if (r === "hinglish") {
-        return facts.venue_name
-          ? { reply: reply(r, `${facts.venue_name} wala naya card ban raha hai.`, `${facts.venue_name} वाला नया card बन रहा है।`), navigate_path: path }
-          : { reply: reply(r, `Revision ${rev ?? ""} ka naya card ban raha hai.`, `Revision ${rev !== undefined ? countHi(rev) : ""} का नया card बन रहा है।`), navigate_path: path };
+      // I-02 (4.10): the second sentence when a card was downloaded before.
+      const older = facts.older_card === true;
+      if (r === "en") {
+        return { reply: reply(r, `Making the card for revision ${rev ?? ""}.${older ? " The card downloaded before is out of date." : ""}`.replace("revision .", "the latest revision.")), navigate_path: path };
       }
-      return { reply: reply(r, `संस्करण ${rev ?? ""} का नया कार्ड बन रहा है।`), navigate_path: path };
+      if (r === "hinglish") {
+        const tail = older ? " Pehle download kiya card purana hai." : "";
+        const tailDev = older ? " पहले download किया card पुराना है।" : "";
+        return facts.venue_name
+          ? { reply: reply(r, `${facts.venue_name} wala naya card ban raha hai.${tail}`, `${facts.venue_name} वाला नया card बन रहा है।${tailDev}`), navigate_path: path }
+          : { reply: reply(r, `Revision ${rev ?? ""} ka naya card ban raha hai.${tail}`, `Revision ${rev !== undefined ? countHi(rev) : ""} का नया card बन रहा है।${tailDev}`), navigate_path: path };
+      }
+      return { reply: reply(r, `संस्करण ${rev !== undefined ? countHi(rev) : ""} का नया कार्ड बन रहा है।${older ? " पहले डाउनलोड किया कार्ड पुराना है।" : ""}`), navigate_path: path };
     }
     case "add_requirement": {
       const path = wedding_id && facts.event_id ? withHighlight(routes.events(wedding_id, facts.event_id), ["requirements"]) : null;
@@ -339,7 +365,7 @@ function commitmentAndPayment(actions: ResolvedAction[], results: StoredResult[]
   const category = facts.role_en === "caterer" ? "catering" : "";
   if (r === "en") {
     const display = `Saved a ${formatInr(total)}${category ? ` ${category}` : ""} commitment and a ${formatInr(paid)} ${kind}.${outstanding !== null ? ` ${formatInr(outstanding)} is outstanding.` : ""}`;
-    return { reply: reply(r, display, display.replace(/₹[0-9,]+/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en"))), navigate_path: path };
+    return { reply: reply(r, display, display.replace(/₹[0-9](?:[0-9,]*[0-9])?/g, (m) => inrWords(Number(m.slice(1).replace(/,/g, "")), "en"))), navigate_path: path };
   }
   if (r === "hinglish") {
     const display = `${formatInr(total)} ka${category ? ` ${category}` : ""} contract aur ${formatInr(paid)} ka ${kind} save ho gaya.${outstanding !== null ? ` ${formatInr(outstanding)} baaki hai.` : ""}`;
