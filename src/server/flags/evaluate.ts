@@ -77,7 +77,8 @@ function allFallbacks(internal: boolean): Record<FlagKey, EvaluatedFlag> {
   ) as Record<FlagKey, EvaluatedFlag>;
 }
 
-function fromSdkFlags(flags: SdkFlagsLike | null, internal: boolean): Record<FlagKey, EvaluatedFlag> {
+/** Every contract flag from one SDK result (null: all fallbacks). Also used by the drawer's probes. */
+export function fromSdkFlags(flags: SdkFlagsLike | null, internal: boolean): Record<FlagKey, EvaluatedFlag> {
   if (!flags) return allFallbacks(internal);
   return Object.fromEntries(FLAG_KEYS.map((key) => [key, fromSdk(flags.flags[key], key, internal)])) as Record<
     FlagKey,
