@@ -116,3 +116,12 @@ export function isGuestView(value: unknown): value is GuestInvitationView {
     Array.isArray(candidate.functions)
   );
 }
+
+/**
+ * The guest page's couple photo, served from the app's own origin (AT-9.5, G6): the signed
+ * Storage URL never reaches the browser. The published revision is in the query, so a new
+ * photo shows after a publish.
+ */
+export function guestPhotoPath(token: string, revision: number): string {
+  return `/api/i/${encodeURIComponent(token)}/photo?r=${revision}`;
+}

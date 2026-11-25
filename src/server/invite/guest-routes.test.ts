@@ -298,3 +298,72 @@ describe("guest routes: dietary (AT-4.9)", () => {
     expect((answer.json.error as { field: string }).field).toBe("idempotency_key");
   });
 });
+
+describe("guest routes: the same-origin couple photo (AT-9.5, G6)", () => {
+  const SIGNED = "https://storage.example.invalid/object/sign/photos/couple.jpg?token=signed-secret-value";
+  const withPhoto: typeof fixtureServices = {
+    ...fixtureServices,
+    async guestInvitationView(token) {
+      const view = await fixtureServices.guestInvitationView(token);
+      return view ? { ...view, wedding: { ...view.wedding, photo_url: SIGNED } } : null;
+    },
+  };
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const photoGet = () => new Request("http://localhost/api/i/x/photo?r=2");
+
+  function photoRoutes(fetchImage: (url: string) => Promise<Response>, limit: GuestLimiter = allowAll, services = withPhoto) {
+    return createGuestRoutes({ services, resolve, limit, fetchImage });
+  }
+
+  it("streams the image from the app's origin with the guest headers, never the signed URL", async () => {
+    const asked: string[] = [];
+    const routes = photoRoutes(async (url) => {
+      asked.push(url);
+      return new Response(jpeg, { headers: { "Content-Type": "image/jpeg", "Content-Length": String(jpeg.length) } });
+    });
+    const response = await routes.photo(photoGet(), FIXTURE_TARA_TOKEN);
+    expect(response.status).toBe(200);
+    expect(asked).toEqual([SIGNED]);
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(jpeg);
+    for (const [, value] of response.headers) expect(value).not.toContain("signed-secret-value");
+  });
+
+  it("answers the page's 404 for a bad token, no photo, a failed fetch or a non-image", async () => {
+    const image = async () => new Response(jpeg, { headers: { "Content-Type": "image/jpeg" } });
+    const cases: Response[] = [
+      await photoRoutes(image).photo(photoGet(), "unknown-token-value"),
+      await photoRoutes(image, allowAll, fixtureServices).photo(photoGet(), FIXTURE_TARA_TOKEN),
+      await photoRoutes(async () => new Response("nope", { status: 403, headers: { "Content-Type": "image/jpeg" } })).photo(photoGet(), FIXTURE_TARA_TOKEN),
+      await photoRoutes(async () => new Response("<html>", { headers: { "Content-Type": "text/html" } })).photo(photoGet(), FIXTURE_TARA_TOKEN),
+      await photoRoutes(async () => {
+        throw new Error("network");
+      }).photo(photoGet(), FIXTURE_TARA_TOKEN),
+    ];
+    for (const response of cases) {
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe(NOT_FOUND_TEXT);
+    }
+  });
+
+  it("counts on its own per-token budget, before reading the view", async () => {
+    const seen: (string | null)[] = [];
+    let fetched = 0;
+    const deny: GuestLimiter = async (input) => {
+      seen.push(input.token_hash);
+      return { allowed: false, retry_after_s: 7 };
+    };
+    const response = await photoRoutes(async () => {
+      fetched += 1;
+      return new Response(jpeg, { headers: { "Content-Type": "image/jpeg" } });
+    }, deny).photo(photoGet(), FIXTURE_TARA_TOKEN);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("7");
+    expect(seen).toEqual([`photo:${guestTokenHash(FIXTURE_TARA_TOKEN)}`]);
+    expect(fetched).toBe(0);
+  });
+});
