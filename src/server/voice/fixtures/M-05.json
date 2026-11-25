@@ -1,0 +1,31 @@
+{
+ "row_id": "M-05",
+ "start_state": "D0",
+ "source": "hand-written from voice.md 7.1 and 7.2",
+ "stt": {
+  "transcript": "Advance चालीस हज़ार था।",
+  "language_code": "hi-IN"
+ },
+ "llm": {
+  "intent": "act",
+  "reply_language": "hinglish",
+  "missing_fields": [
+   "vendor_id"
+  ],
+  "reply": "",
+  "actions": [
+   {
+    "kind": "correct_payment",
+    "payment_kind": "advance",
+    "amount_inr": 40000,
+    "heard": [
+     {
+      "field": "amount_inr",
+      "phrase": "चालीस हज़ार"
+     }
+    ]
+   }
+  ]
+ },
+ "audio_text": null
+}
