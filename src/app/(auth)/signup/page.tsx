@@ -5,8 +5,9 @@ import { connection } from "next/server";
 
 import { AuthCard } from "@/components/auth/AuthCard";
 import { SignUpForm } from "@/components/auth/AuthForm";
+import { TryDemoButton } from "@/components/auth/TryDemoButton";
 import { routes } from "@/contracts/routes";
-import { signUp } from "@/server/auth/actions";
+import { signUp, signInDemo } from "@/server/auth/actions";
 import { MIN_PASSWORD_LENGTH } from "@/server/auth/credentials";
 import { nextFromSearchParams, withNextParam, type PageSearchParams } from "@/server/auth/pages";
 import { getSignedInUser, isLiveAuth } from "@/server/auth/session";
@@ -21,7 +22,9 @@ type SignUpPageProps = { searchParams: Promise<PageSearchParams> };
  */
 export default async function SignUpPage({ searchParams }: SignUpPageProps) {
   await connection();
-  const next = nextFromSearchParams(await searchParams);
+  const params = await searchParams;
+  const next = nextFromSearchParams(params);
+  const demo_unavailable = params.demo === "unavailable";
   const live = isLiveAuth();
   if (live && (await getSignedInUser())) redirect(next ?? routes.home());
 
@@ -44,6 +47,7 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
         </p>
       )}
       <SignUpForm action={signUp} next={next} min_password_length={MIN_PASSWORD_LENGTH} />
+      <TryDemoButton action={signInDemo} unavailable={demo_unavailable} />
     </AuthCard>
   );
 }
