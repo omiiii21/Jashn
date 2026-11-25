@@ -27,6 +27,12 @@ export type InvitationCardProps = {
   check_line?: { label: string; text_hi: string } | null;
 };
 
+/**
+ * The card's body face: Anek Devanagari (export 1.2), named through fonts.ts's variable.
+ * Not `font-sans`, which is the planner's UI stack (Geist first, no Devanagari, D132).
+ */
+const BODY_FACE = "font-[family-name:var(--font-body)]";
+
 export function InvitationCard({ model, className, check_line = null }: InvitationCardProps) {
   const hindiFace = model.typeface === "tiro_devanagari" ? "font-classic" : "font-serif";
   const rootStyle = {
@@ -123,25 +129,25 @@ export function InvitationCard({ model, className, check_line = null }: Invitati
                         </span>
                       ) : null}
                     </p>
-                    <div className="font-sans text-[25px] leading-[1.4] text-invite-ink group-data-[fit=compact]:hidden">
+                    <div className={`${BODY_FACE} text-[25px] leading-[1.4] text-invite-ink group-data-[fit=compact]:hidden`}>
                       <p>{fn.date_line}</p>
                       {fn.time_line ? <p>{fn.time_line}</p> : null}
                       {fn.muhurat_line ? <p>{fn.muhurat_line}</p> : null}
                       {fn.venue_line ? <p>{fn.venue_line}</p> : null}
                     </div>
-                    <p className="hidden font-sans text-[25px] leading-[1.4] text-invite-ink group-data-[fit=compact]:block">
+                    <p className={`hidden ${BODY_FACE} text-[25px] leading-[1.4] text-invite-ink group-data-[fit=compact]:block`}>
                       {[fn.title, fn.date_line, fn.time_line, fn.venue_line?.split(",")[0]].filter(Boolean).join(", ")}
                     </p>
                   </div>
                 ))}
                 {model.more_functions_line ? (
-                  <p className="font-sans text-[22px] leading-[1.4] text-invite-ink" style={gap(16)}>
+                  <p className={`${BODY_FACE} text-[22px] leading-[1.4] text-invite-ink`} style={gap(16)}>
                     {model.more_functions_line}
                   </p>
                 ) : null}
               </div>
             ) : model.fallback_date_line ? (
-              <p className="font-sans text-[25px] leading-[1.4] text-invite-ink" style={gap(30)}>
+              <p className={`${BODY_FACE} text-[25px] leading-[1.4] text-invite-ink`} style={gap(30)}>
                 {model.fallback_date_line}
               </p>
             ) : null}
@@ -157,18 +163,18 @@ export function InvitationCard({ model, className, check_line = null }: Invitati
               </p>
             ) : null}
 
-            <p className="font-sans text-[22px] leading-[1.4] text-invite-ink" style={gap(14)}>
+            <p className={`${BODY_FACE} text-[22px] leading-[1.4] text-invite-ink`} style={gap(14)}>
               {model.reply_line}
             </p>
 
             {model.footer ? (
-              <p className="font-sans text-[18px] leading-[1.4] text-invite-ink" style={gap(18)}>
+              <p className={`${BODY_FACE} text-[18px] leading-[1.4] text-invite-ink`} style={gap(18)}>
                 {model.footer}
               </p>
             ) : null}
 
             {check_line ? (
-              <p className="font-sans text-[22px] leading-[1.5] text-invite-ink" style={gap(12)}>
+              <p className={`${BODY_FACE} text-[22px] leading-[1.5] text-invite-ink`} style={gap(12)}>
                 {check_line.label}{" "}
                 <span lang="hi" data-font-check="">
                   {check_line.text_hi}
