@@ -87,6 +87,9 @@ export async function VoiceDock(props: VoiceDockProps) {
   if (!flags.voice_available) return <DisabledMic />;
 
   const fixture_mode = isFixtureMode();
+  // No speech service configured (no SARVAM_API_KEY): the mic is off for everyone, so nobody
+  // records a turn that can only fail. Fixture mode (local development) still records.
+  if (!fixture_mode && !process.env.SARVAM_API_KEY?.trim()) return <DisabledMic />;
 
   return (
     <VoiceDockClient
